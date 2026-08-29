@@ -444,10 +444,12 @@ func TestIntegrationVolumeGroupRename(t *testing.T) {
 
 func TestIntegrationVolumeGroupChangeAndSelect(t *testing.T) {
 	loop := loopDevice(t)
-	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	spare := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop, spare))
 	ctx := t.Context()
 
 	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, spare, CreatePhysicalVolumeOptions{}))
 	name := vgFor(t, loop)
 
 	require.NoError(t, client.ChangeVolumeGroup(ctx, Name(name), ChangeVolumeGroupOptions{
@@ -468,6 +470,9 @@ func TestIntegrationVolumeGroupChangeAndSelect(t *testing.T) {
 		Resizeable: Bool(false),
 	}))
 	err = client.ExtendVolumeGroup(ctx, name, []Device{loop}, ExtendVolumeGroupOptions{})
+	assert.ErrorIs(t, err, ErrAlreadyExists, "extending with an existing member")
+
+	err = client.ExtendVolumeGroup(ctx, name, []Device{spare}, ExtendVolumeGroupOptions{})
 	require.Error(t, err, "extending a non resizeable vg must fail")
 	t.Logf("non resizeable stderr for the harvest: %v", err)
 	require.NoError(t, client.ChangeVolumeGroup(ctx, Name(name), ChangeVolumeGroupOptions{

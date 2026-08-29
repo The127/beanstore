@@ -29,6 +29,7 @@ func TestHarvestedStderrClassification(t *testing.T) {
 		{"untracked device", 5, "Cannot use /dev/loop0: device is not in devices file", ErrNotFound},
 		{"absent vg", 5, `Volume group "absent-vg" not found
   Cannot process volume group absent-vg`, ErrNotFound},
+		{"extend with existing member", 5, "Physical volume '/dev/loop0' is already in volume group 'beanstore-test-2769'", ErrAlreadyExists},
 		{"duplicate vg name", 5, "A volume group called beanstore-vgtest-2772 already exists.", ErrAlreadyExists},
 		{"pvcreate on vg member", 5, `Can't initialize physical volume "/dev/loop0" of volume group "errtest-vg" without -ff`, ErrInUse},
 		{"pvremove on vg member", 5, "PV /dev/loop0 is used by VG errtest-vg so please use vgreduce first.", ErrInUse},

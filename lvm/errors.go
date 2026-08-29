@@ -53,6 +53,7 @@ var stderrPatterns = []struct {
 	{"is not in devices file", ErrNotFound},
 	{`" not found`, ErrNotFound},
 	{"already exists", ErrAlreadyExists},
+	{"is already in volume group", ErrAlreadyExists},
 	{"is used by VG", ErrInUse},
 	{"without -ff", ErrInUse},
 }
