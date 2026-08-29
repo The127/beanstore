@@ -15,6 +15,9 @@ var (
 	ErrAlreadyExists = errors.New("lvm object already exists")
 	// ErrInUse reports an object refused because something else uses it.
 	ErrInUse = errors.New("lvm object in use")
+	// ErrNotAllowed reports an operation refused by the object's state
+	// or configuration.
+	ErrNotAllowed = errors.New("lvm operation not allowed")
 	// ErrPermission reports missing privileges for lvm's devices, locks
 	// or metadata.
 	ErrPermission = errors.New("lvm permission denied")
@@ -55,6 +58,7 @@ var stderrPatterns = []struct {
 	{"already exists", ErrAlreadyExists},
 	{"is already in volume group", ErrAlreadyExists},
 	{"is used by VG", ErrInUse},
+	{"is not resizeable", ErrNotAllowed},
 	{"without -ff", ErrInUse},
 }
 

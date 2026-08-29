@@ -473,8 +473,7 @@ func TestIntegrationVolumeGroupChangeAndSelect(t *testing.T) {
 	assert.ErrorIs(t, err, ErrAlreadyExists, "extending with an existing member")
 
 	err = client.ExtendVolumeGroup(ctx, name, []Device{spare}, ExtendVolumeGroupOptions{})
-	require.Error(t, err, "extending a non resizeable vg must fail")
-	t.Logf("non resizeable stderr for the harvest: %v", err)
+	assert.ErrorIs(t, err, ErrNotAllowed, "extending a non resizeable vg")
 	require.NoError(t, client.ChangeVolumeGroup(ctx, Name(name), ChangeVolumeGroupOptions{
 		Resizeable: Bool(true),
 	}))

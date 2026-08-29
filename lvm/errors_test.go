@@ -33,6 +33,7 @@ func TestHarvestedStderrClassification(t *testing.T) {
 		{"duplicate vg name", 5, "A volume group called beanstore-vgtest-2772 already exists.", ErrAlreadyExists},
 		{"pvcreate on vg member", 5, `Can't initialize physical volume "/dev/loop0" of volume group "errtest-vg" without -ff`, ErrInUse},
 		{"pvremove on vg member", 5, "PV /dev/loop0 is used by VG errtest-vg so please use vgreduce first.", ErrInUse},
+		{"non resizeable vg", 5, "Volume group beanstore-test-2770 is not resizeable.", ErrNotAllowed},
 		{"unprivileged", 5, "/run/lock/lvm/P_global:aux: open failed: Permission denied", ErrPermission},
 		{"command line parse error", 3, "Error during parsing of command line.", ErrInvalidCommand},
 	}
@@ -57,6 +58,7 @@ func TestUnclassifiedFailureStillCarriesDetails(t *testing.T) {
 	assert.Equal(t, "something entirely new", lvmErr.Stderr)
 	assert.False(t, errors.Is(err, ErrNotFound))
 	assert.False(t, errors.Is(err, ErrAlreadyExists))
+	assert.False(t, errors.Is(err, ErrNotAllowed))
 	assert.False(t, errors.Is(err, ErrInUse))
 	assert.False(t, errors.Is(err, ErrPermission))
 	assert.False(t, errors.Is(err, ErrInvalidCommand))
