@@ -59,6 +59,19 @@ Every operation takes an options struct. Its fields cover the command's
 flags, and the embedded `CommonOptions` override the client environment
 (device scoping, autobackup) for one call.
 
+## Deliberately not wrapped
+
+- `pvdata` and `vgconvert` operate on lvm1 metadata.
+- `lvpoll` is an internal command of `lvmpolld`.
+- Sparse volumes (`lvcreate -s --virtualsize`) are the predecessor of
+  thin volumes.
+- `--persistent`, `--major` and `--minor` set fixed device numbers and
+  are deprecated.
+- `--sysinit` and `--ignorelockingfailure` exist for early boot
+  scripts.
+- The udev forms of `pvscan`. Only `pvscan --cache` is wrapped, and
+  plain listing is `ListPhysicalVolumes`' job.
+
 Change operations address their targets through a selector:
 `lvm.Device`, `lvm.Select` criteria (see lvmreport(7)), or `lvm.All`.
 List operations filter with the `Select` options field instead:
