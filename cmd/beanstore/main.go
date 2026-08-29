@@ -68,6 +68,11 @@ func run() error {
 		return fmt.Errorf("preparing storage: %w", err)
 	}
 
+	err = storage.Recover(ctx, lvmClient, cfg)
+	if err != nil {
+		return fmt.Errorf("recovering volumes: %w", err)
+	}
+
 	// the notifier is nil outside systemd, all methods no-op on nil
 	notifier, err := sdnotify.New()
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

@@ -136,6 +136,47 @@ func waitDone(t *testing.T, operations beanstorev1.OperationServiceClient, id st
 	}, 30*time.Second, 100*time.Millisecond)
 }
 
+func TestIntegrationRecovery(t *testing.T) {
+	loop := loopDevice(t)
+	client := lvm.New(lvm.WithRunner(sudoRunner{}), lvm.WithDevices(loop))
+	ctx := t.Context()
+
+	vg := fmt.Sprintf("beanstore-recover-%d", os.Getpid())
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, lvm.CreatePhysicalVolumeOptions{}))
+	require.NoError(t, client.CreateVolumeGroup(ctx, vg, []lvm.Device{loop}, lvm.CreateVolumeGroupOptions{}))
+	t.Cleanup(func() {
+		//nolint:usetesting // t.Context is done during cleanup
+		_ = client.RemoveVolumeGroup(context.Background(), vg, lvm.RemoveVolumeGroupOptions{Force: true})
+	})
+
+	cfg := config.Config{
+		VolumeGroup: vg,
+		ThinPool:    "pool0",
+		CreatePool:  true,
+		PoolSize:    config.PoolSize{Bytes: 256 << 20},
+	}
+	require.NoError(t, storage.Setup(ctx, client, cfg))
+
+	// crash leftovers: an unfinished creation and an attached volume
+	// whose activation was lost
+	require.NoError(t, client.CreateThinVolume(ctx, vg, "pool0", "vol-garbage", 16<<20, lvm.CreateThinVolumeOptions{
+		AddTags:  []string{storage.StateTag(storage.StateCreating)},
+		Activate: lvm.Bool(false),
+	}))
+	require.NoError(t, client.CreateThinVolume(ctx, vg, "pool0", "vol-attached", 16<<20, lvm.CreateThinVolumeOptions{
+		AddTags:  []string{storage.StateTag(storage.StateAttached)},
+		Activate: lvm.Bool(false),
+	}))
+
+	require.NoError(t, storage.Recover(ctx, client, cfg))
+
+	volumes, err := storage.ListVolumes(ctx, client, cfg)
+	require.NoError(t, err)
+	require.Len(t, volumes, 1, "the creating volume is gone")
+	assert.Equal(t, "vol-attached", volumes[0].ID)
+	assert.NotEmpty(t, volumes[0].Path, "re-activated")
+}
+
 func TestIntegrationDaemonLifecycle(t *testing.T) {
 	volumes, operations := daemon(t)
 	ctx := t.Context()
