@@ -27,6 +27,40 @@ func TestCreateLogicalVolumeBuildsCommand(t *testing.T) {
 	}, fake.calls[0].Args())
 }
 
+func TestCreateLogicalVolumeOptionsBuildCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.CreateLogicalVolume(t.Context(), "vg0", "lv0", 33554432, CreateLogicalVolumeOptions{
+		Permission:           PermissionReadOnly,
+		Readahead:            ReadaheadAuto,
+		Contiguous:           Bool(true),
+		Allocation:           AllocationCling,
+		SetActivationSkip:    Bool(true),
+		IgnoreActivationSkip: true,
+		SetAutoactivation:    Bool(false),
+		Zero:                 Bool(false),
+		WipeSignatures:       Bool(false),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"lvcreate",
+		"-L", "33554432b",
+		"-n", "lv0",
+		"-p", "r",
+		"-r", "auto",
+		"-C", "y",
+		"--alloc", "cling",
+		"-k", "y",
+		"-K",
+		"--setautoactivation", "n",
+		"-Z", "n",
+		"-W", "n",
+		"vg0",
+	}, fake.calls[0].Args())
+}
+
 func TestCreateThinPoolBuildsCommand(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
@@ -44,6 +78,45 @@ func TestCreateThinPoolBuildsCommand(t *testing.T) {
 		"-n", "pool0",
 		"-c", "65536b",
 		"--poolmetadatasize", "4194304b",
+		"vg0",
+	}, fake.calls[0].Args())
+}
+
+func TestCreateThinPoolOptionsBuildCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.CreateThinPool(t.Context(), "vg0", "pool0", 536870912, CreateThinPoolOptions{
+		Activate:          Bool(true),
+		Permission:        PermissionReadWrite,
+		Readahead:         ReadaheadNone,
+		Contiguous:        Bool(false),
+		Allocation:        AllocationNormal,
+		SetActivationSkip: Bool(false),
+		SetAutoactivation: Bool(true),
+		Zero:              Bool(false),
+		Discards:          DiscardsIgnore,
+		ErrorWhenFull:     Bool(true),
+		PoolMetadataSpare: Bool(false),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"lvcreate",
+		"--type", "thin-pool",
+		"-L", "536870912b",
+		"-n", "pool0",
+		"-a", "y",
+		"-p", "rw",
+		"-r", "none",
+		"-C", "n",
+		"--alloc", "normal",
+		"-k", "n",
+		"--setautoactivation", "y",
+		"-Z", "n",
+		"--discards", "ignore",
+		"--errorwhenfull", "y",
+		"--poolmetadataspare", "n",
 		"vg0",
 	}, fake.calls[0].Args())
 }
@@ -66,6 +139,42 @@ func TestCreateThinVolumeBuildsCommand(t *testing.T) {
 		"-n", "vol1",
 		"--addtag", "state.creating",
 		"-a", "n",
+		"vg0",
+	}, fake.calls[0].Args())
+}
+
+func TestCreateThinVolumeOptionsBuildCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.CreateThinVolume(t.Context(), "vg0", "pool0", "vol1", 1073741824, CreateThinVolumeOptions{
+		Permission:           PermissionReadOnly,
+		Readahead:            ReadaheadSectors(128),
+		Contiguous:           Bool(false),
+		Allocation:           AllocationInherit,
+		SetActivationSkip:    Bool(true),
+		IgnoreActivationSkip: true,
+		SetAutoactivation:    Bool(false),
+		Zero:                 Bool(true),
+		WipeSignatures:       Bool(true),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"lvcreate",
+		"--type", "thin",
+		"--thinpool", "pool0",
+		"-V", "1073741824b",
+		"-n", "vol1",
+		"-p", "r",
+		"-r", "128",
+		"-C", "n",
+		"--alloc", "inherit",
+		"-k", "y",
+		"-K",
+		"--setautoactivation", "n",
+		"-Z", "y",
+		"-W", "y",
 		"vg0",
 	}, fake.calls[0].Args())
 }

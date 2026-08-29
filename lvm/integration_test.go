@@ -690,6 +690,45 @@ func TestIntegrationLogicalVolumeResizeAndRename(t *testing.T) {
 	require.NoError(t, client.ScanLogicalVolumes(ctx, ScanLogicalVolumesOptions{}))
 }
 
+func TestIntegrationLogicalVolumeCreateOptions(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	vg := vgFor(t, loop)
+
+	// zeroing a read-only lv is impossible, so it is turned off
+	require.NoError(t, client.CreateLogicalVolume(ctx, vg, "lv0", 32<<20, CreateLogicalVolumeOptions{
+		Permission:           PermissionReadOnly,
+		Zero:                 Bool(false),
+		SetActivationSkip:    Bool(true),
+		IgnoreActivationSkip: true,
+	}))
+	linear := lvByName(t, client, vg, "lv0")
+	assert.Equal(t, byte('r'), linear.Attributes[1])
+	assert.Equal(t, byte('k'), linear.Attributes[9])
+	assert.True(t, linear.Active, "skip flag ignored at creation")
+
+	require.NoError(t, client.CreateThinPool(ctx, vg, "pool0", 256<<20, CreateThinPoolOptions{
+		Zero:              Bool(false),
+		Discards:          DiscardsNoPassdown,
+		ErrorWhenFull:     Bool(true),
+		PoolMetadataSpare: Bool(false),
+	}))
+	assert.Equal(t, byte('-'), lvByName(t, client, vg, "pool0").Attributes[7])
+
+	require.NoError(t, client.CreateThinVolume(ctx, vg, "pool0", "vol1", 64<<20, CreateThinVolumeOptions{
+		Activate:          Bool(false),
+		Readahead:         ReadaheadNone,
+		SetActivationSkip: Bool(true),
+		SetAutoactivation: Bool(false),
+	}))
+	vol := lvByName(t, client, vg, "vol1")
+	assert.Equal(t, byte('k'), vol.Attributes[9])
+	assert.False(t, vol.Active)
+}
+
 func TestIntegrationLogicalVolumeChangeProperties(t *testing.T) {
 	loop := loopDevice(t)
 	client := New(WithRunner(sudoRunner{}), WithDevices(loop))

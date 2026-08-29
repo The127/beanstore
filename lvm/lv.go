@@ -34,6 +34,27 @@ type CreateLogicalVolumeOptions struct {
 	// Activate controls whether the new lv is activated, lvm's default
 	// when nil.
 	Activate *bool
+	// Permission sets the lv read/write permission.
+	Permission Permission
+	// Readahead sets the lv readahead.
+	Readahead Readahead
+	// Contiguous controls contiguous extent allocation.
+	Contiguous *bool
+	// Allocation sets the extent allocation policy.
+	Allocation AllocationPolicy
+	// SetActivationSkip controls the flag that makes activation skip
+	// the lv unless IgnoreActivationSkip is used.
+	SetActivationSkip *bool
+	// IgnoreActivationSkip activates the lv even when flagged to be
+	// skipped.
+	IgnoreActivationSkip bool
+	// SetAutoactivation controls whether the lv autoactivates on boot
+	// and device appearance.
+	SetAutoactivation *bool
+	// Zero controls zeroing of the first 4KiB of the new lv.
+	Zero *bool
+	// WipeSignatures controls wiping of filesystem and raid signatures.
+	WipeSignatures *bool
 }
 
 // CreateLogicalVolume creates a linear lv.
@@ -47,6 +68,33 @@ func (c *Client) CreateLogicalVolume(ctx context.Context, vg, name string, sizeB
 	}
 	if opts.Activate != nil {
 		cmd = cmd.Append("-a", flagValue(*opts.Activate))
+	}
+	if opts.Permission != "" {
+		cmd = cmd.Append("-p", string(opts.Permission))
+	}
+	if opts.Readahead != "" {
+		cmd = cmd.Append("-r", string(opts.Readahead))
+	}
+	if opts.Contiguous != nil {
+		cmd = cmd.Append("-C", flagValue(*opts.Contiguous))
+	}
+	if opts.Allocation != "" {
+		cmd = cmd.Append("--alloc", string(opts.Allocation))
+	}
+	if opts.SetActivationSkip != nil {
+		cmd = cmd.Append("-k", flagValue(*opts.SetActivationSkip))
+	}
+	if opts.IgnoreActivationSkip {
+		cmd = cmd.Append("-K")
+	}
+	if opts.SetAutoactivation != nil {
+		cmd = cmd.Append("--setautoactivation", flagValue(*opts.SetAutoactivation))
+	}
+	if opts.Zero != nil {
+		cmd = cmd.Append("-Z", flagValue(*opts.Zero))
+	}
+	if opts.WipeSignatures != nil {
+		cmd = cmd.Append("-W", flagValue(*opts.WipeSignatures))
 	}
 	cmd = cmd.Append(vg)
 
@@ -67,6 +115,35 @@ type CreateThinPoolOptions struct {
 	// MetadataSizeBytes sets the pool metadata lv size, lvm's default
 	// when zero.
 	MetadataSizeBytes uint64
+	// Activate controls whether the new pool is activated, lvm's
+	// default when nil.
+	Activate *bool
+	// Permission sets the pool read/write permission.
+	Permission Permission
+	// Readahead sets the pool readahead.
+	Readahead Readahead
+	// Contiguous controls contiguous extent allocation.
+	Contiguous *bool
+	// Allocation sets the extent allocation policy.
+	Allocation AllocationPolicy
+	// SetActivationSkip controls the flag that makes activation skip
+	// the pool unless IgnoreActivationSkip is used.
+	SetActivationSkip *bool
+	// IgnoreActivationSkip activates the pool even when flagged to be
+	// skipped.
+	IgnoreActivationSkip bool
+	// SetAutoactivation controls whether the pool autoactivates on
+	// boot and device appearance.
+	SetAutoactivation *bool
+	// Zero controls zeroing of newly provisioned pool blocks.
+	Zero *bool
+	// Discards sets how the pool handles discards.
+	Discards Discards
+	// ErrorWhenFull makes writes to a full pool error instead of queue.
+	ErrorWhenFull *bool
+	// PoolMetadataSpare controls creation of the spare metadata lv in
+	// the vg.
+	PoolMetadataSpare *bool
 }
 
 // CreateThinPool creates a thin pool lv of the given data size.
@@ -85,6 +162,42 @@ func (c *Client) CreateThinPool(ctx context.Context, vg, name string, sizeBytes 
 	if opts.MetadataSizeBytes > 0 {
 		cmd = cmd.Append("--poolmetadatasize", strconv.FormatUint(opts.MetadataSizeBytes, 10)+"b")
 	}
+	if opts.Activate != nil {
+		cmd = cmd.Append("-a", flagValue(*opts.Activate))
+	}
+	if opts.Permission != "" {
+		cmd = cmd.Append("-p", string(opts.Permission))
+	}
+	if opts.Readahead != "" {
+		cmd = cmd.Append("-r", string(opts.Readahead))
+	}
+	if opts.Contiguous != nil {
+		cmd = cmd.Append("-C", flagValue(*opts.Contiguous))
+	}
+	if opts.Allocation != "" {
+		cmd = cmd.Append("--alloc", string(opts.Allocation))
+	}
+	if opts.SetActivationSkip != nil {
+		cmd = cmd.Append("-k", flagValue(*opts.SetActivationSkip))
+	}
+	if opts.IgnoreActivationSkip {
+		cmd = cmd.Append("-K")
+	}
+	if opts.SetAutoactivation != nil {
+		cmd = cmd.Append("--setautoactivation", flagValue(*opts.SetAutoactivation))
+	}
+	if opts.Zero != nil {
+		cmd = cmd.Append("-Z", flagValue(*opts.Zero))
+	}
+	if opts.Discards != "" {
+		cmd = cmd.Append("--discards", string(opts.Discards))
+	}
+	if opts.ErrorWhenFull != nil {
+		cmd = cmd.Append("--errorwhenfull", flagValue(*opts.ErrorWhenFull))
+	}
+	if opts.PoolMetadataSpare != nil {
+		cmd = cmd.Append("--poolmetadataspare", flagValue(*opts.PoolMetadataSpare))
+	}
 	cmd = cmd.Append(vg)
 
 	_, err := c.run(ctx, cmd)
@@ -102,6 +215,27 @@ type CreateThinVolumeOptions struct {
 	// Activate controls whether the new lv is activated, lvm's default
 	// when nil.
 	Activate *bool
+	// Permission sets the lv read/write permission.
+	Permission Permission
+	// Readahead sets the lv readahead.
+	Readahead Readahead
+	// Contiguous controls contiguous extent allocation.
+	Contiguous *bool
+	// Allocation sets the extent allocation policy.
+	Allocation AllocationPolicy
+	// SetActivationSkip controls the flag that makes activation skip
+	// the lv unless IgnoreActivationSkip is used.
+	SetActivationSkip *bool
+	// IgnoreActivationSkip activates the lv even when flagged to be
+	// skipped.
+	IgnoreActivationSkip bool
+	// SetAutoactivation controls whether the lv autoactivates on boot
+	// and device appearance.
+	SetAutoactivation *bool
+	// Zero controls zeroing of the first 4KiB of the new lv.
+	Zero *bool
+	// WipeSignatures controls wiping of filesystem and raid signatures.
+	WipeSignatures *bool
 }
 
 // CreateThinVolume creates a thin lv of the given virtual size in a
@@ -118,6 +252,33 @@ func (c *Client) CreateThinVolume(ctx context.Context, vg, pool, name string, vi
 	}
 	if opts.Activate != nil {
 		cmd = cmd.Append("-a", flagValue(*opts.Activate))
+	}
+	if opts.Permission != "" {
+		cmd = cmd.Append("-p", string(opts.Permission))
+	}
+	if opts.Readahead != "" {
+		cmd = cmd.Append("-r", string(opts.Readahead))
+	}
+	if opts.Contiguous != nil {
+		cmd = cmd.Append("-C", flagValue(*opts.Contiguous))
+	}
+	if opts.Allocation != "" {
+		cmd = cmd.Append("--alloc", string(opts.Allocation))
+	}
+	if opts.SetActivationSkip != nil {
+		cmd = cmd.Append("-k", flagValue(*opts.SetActivationSkip))
+	}
+	if opts.IgnoreActivationSkip {
+		cmd = cmd.Append("-K")
+	}
+	if opts.SetAutoactivation != nil {
+		cmd = cmd.Append("--setautoactivation", flagValue(*opts.SetAutoactivation))
+	}
+	if opts.Zero != nil {
+		cmd = cmd.Append("-Z", flagValue(*opts.Zero))
+	}
+	if opts.WipeSignatures != nil {
+		cmd = cmd.Append("-W", flagValue(*opts.WipeSignatures))
 	}
 	cmd = cmd.Append(vg)
 
