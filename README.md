@@ -24,6 +24,29 @@ the node it runs on and moves detached volumes between nodes — nothing more.
 Not yet. The gRPC API surface (volume lifecycle, attach/detach, the move
 protocol, and the scan) will be documented here once it exists.
 
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). In
+short: commits follow plain Conventional Commits (`type: description`, no
+scopes) and must be DCO signed off (`git commit -s`). Both rules are
+enforced by git hooks.
+
+## Development setup
+
+Required tooling:
+
+- [Go](https://go.dev/) 1.25+ — the repo holds two modules: the server at
+  the root and the client library in `client/`.
+- [golangci-lint](https://golangci-lint.run/) v2 — linting, configured in
+  `.golangci.yml`.
+- [lefthook](https://lefthook.dev/) — git hooks (lint on pre-commit,
+  commit message and sign-off checks on commit-msg). After cloning,
+  activate the hooks once:
+
+  ```bash
+  lefthook install
+  ```
+
 ## License
 
 - The beanstore server (this repository's root module) is licensed under
