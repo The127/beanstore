@@ -47,6 +47,10 @@ service VolumeService {
   // trailer. Deleting the snapshot or force deleting its origin is
   // refused while the export runs.
   rpc Export(ExportRequest) returns (stream ExportResponse);
+
+  // PrepareReceive creates an INCOMING volume for a transfer. Refused
+  // beyond the node's inbound transfer limit.
+  rpc PrepareReceive(PrepareReceiveRequest) returns (PrepareReceiveResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -140,6 +144,14 @@ message ExportResponse {
     ExportTrailer trailer = 2;
   }
 }
+
+message PrepareReceiveRequest {
+  string volume_id = 1;
+  uint64 size_bytes = 2;
+  string transfer_id = 3;
+}
+
+message PrepareReceiveResponse {}
 
 message GetNodeStatusRequest {}
 

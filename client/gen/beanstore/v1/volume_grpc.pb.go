@@ -29,6 +29,7 @@ const (
 	VolumeService_CreateSnapshot_FullMethodName = "/beanstore.v1.VolumeService/CreateSnapshot"
 	VolumeService_DeleteSnapshot_FullMethodName = "/beanstore.v1.VolumeService/DeleteSnapshot"
 	VolumeService_Export_FullMethodName         = "/beanstore.v1.VolumeService/Export"
+	VolumeService_PrepareReceive_FullMethodName = "/beanstore.v1.VolumeService/PrepareReceive"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -67,6 +68,9 @@ type VolumeServiceClient interface {
 	// trailer. Deleting the snapshot or force deleting its origin is
 	// refused while the export runs.
 	Export(ctx context.Context, in *ExportRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExportResponse], error)
+	// PrepareReceive creates an INCOMING volume for a transfer. Refused
+	// beyond the node's inbound transfer limit.
+	PrepareReceive(ctx context.Context, in *PrepareReceiveRequest, opts ...grpc.CallOption) (*PrepareReceiveResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -186,6 +190,16 @@ func (c *volumeServiceClient) Export(ctx context.Context, in *ExportRequest, opt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type VolumeService_ExportClient = grpc.ServerStreamingClient[ExportResponse]
 
+func (c *volumeServiceClient) PrepareReceive(ctx context.Context, in *PrepareReceiveRequest, opts ...grpc.CallOption) (*PrepareReceiveResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareReceiveResponse)
+	err := c.cc.Invoke(ctx, VolumeService_PrepareReceive_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -222,6 +236,9 @@ type VolumeServiceServer interface {
 	// trailer. Deleting the snapshot or force deleting its origin is
 	// refused while the export runs.
 	Export(*ExportRequest, grpc.ServerStreamingServer[ExportResponse]) error
+	// PrepareReceive creates an INCOMING volume for a transfer. Refused
+	// beyond the node's inbound transfer limit.
+	PrepareReceive(context.Context, *PrepareReceiveRequest) (*PrepareReceiveResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -261,6 +278,9 @@ func (UnimplementedVolumeServiceServer) DeleteSnapshot(context.Context, *DeleteS
 }
 func (UnimplementedVolumeServiceServer) Export(*ExportRequest, grpc.ServerStreamingServer[ExportResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method Export not implemented")
+}
+func (UnimplementedVolumeServiceServer) PrepareReceive(context.Context, *PrepareReceiveRequest) (*PrepareReceiveResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrepareReceive not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -456,6 +476,24 @@ func _VolumeService_Export_Handler(srv interface{}, stream grpc.ServerStream) er
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type VolumeService_ExportServer = grpc.ServerStreamingServer[ExportResponse]
 
+func _VolumeService_PrepareReceive_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareReceiveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).PrepareReceive(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_PrepareReceive_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).PrepareReceive(ctx, req.(*PrepareReceiveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -498,6 +536,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteSnapshot",
 			Handler:    _VolumeService_DeleteSnapshot_Handler,
+		},
+		{
+			MethodName: "PrepareReceive",
+			Handler:    _VolumeService_PrepareReceive_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

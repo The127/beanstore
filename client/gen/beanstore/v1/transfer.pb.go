@@ -131,6 +131,426 @@ func (x *ExportTrailer) GetSizeBytes() uint64 {
 	return 0
 }
 
+type QueryTransferRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TransferId    string                 `protobuf:"bytes,1,opt,name=transfer_id,json=transferId,proto3" json:"transfer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryTransferRequest) Reset() {
+	*x = QueryTransferRequest{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryTransferRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryTransferRequest) ProtoMessage() {}
+
+func (x *QueryTransferRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryTransferRequest.ProtoReflect.Descriptor instead.
+func (*QueryTransferRequest) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *QueryTransferRequest) GetTransferId() string {
+	if x != nil {
+		return x.TransferId
+	}
+	return ""
+}
+
+type QueryTransferResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// next_offset is where the frame stream continues.
+	NextOffset    uint64 `protobuf:"varint,1,opt,name=next_offset,json=nextOffset,proto3" json:"next_offset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryTransferResponse) Reset() {
+	*x = QueryTransferResponse{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryTransferResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryTransferResponse) ProtoMessage() {}
+
+func (x *QueryTransferResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryTransferResponse.ProtoReflect.Descriptor instead.
+func (*QueryTransferResponse) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *QueryTransferResponse) GetNextOffset() uint64 {
+	if x != nil {
+		return x.NextOffset
+	}
+	return 0
+}
+
+type ReceiveRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Content:
+	//
+	//	*ReceiveRequest_Header
+	//	*ReceiveRequest_Frame
+	Content       isReceiveRequest_Content `protobuf_oneof:"content"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReceiveRequest) Reset() {
+	*x = ReceiveRequest{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReceiveRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReceiveRequest) ProtoMessage() {}
+
+func (x *ReceiveRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReceiveRequest.ProtoReflect.Descriptor instead.
+func (*ReceiveRequest) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ReceiveRequest) GetContent() isReceiveRequest_Content {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *ReceiveRequest) GetHeader() *ReceiveHeader {
+	if x != nil {
+		if x, ok := x.Content.(*ReceiveRequest_Header); ok {
+			return x.Header
+		}
+	}
+	return nil
+}
+
+func (x *ReceiveRequest) GetFrame() *Frame {
+	if x != nil {
+		if x, ok := x.Content.(*ReceiveRequest_Frame); ok {
+			return x.Frame
+		}
+	}
+	return nil
+}
+
+type isReceiveRequest_Content interface {
+	isReceiveRequest_Content()
+}
+
+type ReceiveRequest_Header struct {
+	// header names the transfer, it must be the first message.
+	Header *ReceiveHeader `protobuf:"bytes,1,opt,name=header,proto3,oneof"`
+}
+
+type ReceiveRequest_Frame struct {
+	Frame *Frame `protobuf:"bytes,2,opt,name=frame,proto3,oneof"`
+}
+
+func (*ReceiveRequest_Header) isReceiveRequest_Content() {}
+
+func (*ReceiveRequest_Frame) isReceiveRequest_Content() {}
+
+type ReceiveHeader struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TransferId    string                 `protobuf:"bytes,1,opt,name=transfer_id,json=transferId,proto3" json:"transfer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReceiveHeader) Reset() {
+	*x = ReceiveHeader{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReceiveHeader) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReceiveHeader) ProtoMessage() {}
+
+func (x *ReceiveHeader) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReceiveHeader.ProtoReflect.Descriptor instead.
+func (*ReceiveHeader) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ReceiveHeader) GetTransferId() string {
+	if x != nil {
+		return x.TransferId
+	}
+	return ""
+}
+
+type ReceiveResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReceiveResponse) Reset() {
+	*x = ReceiveResponse{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReceiveResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReceiveResponse) ProtoMessage() {}
+
+func (x *ReceiveResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReceiveResponse.ProtoReflect.Descriptor instead.
+func (*ReceiveResponse) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{6}
+}
+
+type CommitTransferRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TransferId    string                 `protobuf:"bytes,1,opt,name=transfer_id,json=transferId,proto3" json:"transfer_id,omitempty"`
+	Digest        []byte                 `protobuf:"bytes,2,opt,name=digest,proto3" json:"digest,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommitTransferRequest) Reset() {
+	*x = CommitTransferRequest{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommitTransferRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommitTransferRequest) ProtoMessage() {}
+
+func (x *CommitTransferRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommitTransferRequest.ProtoReflect.Descriptor instead.
+func (*CommitTransferRequest) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CommitTransferRequest) GetTransferId() string {
+	if x != nil {
+		return x.TransferId
+	}
+	return ""
+}
+
+func (x *CommitTransferRequest) GetDigest() []byte {
+	if x != nil {
+		return x.Digest
+	}
+	return nil
+}
+
+type CommitTransferResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommitTransferResponse) Reset() {
+	*x = CommitTransferResponse{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommitTransferResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommitTransferResponse) ProtoMessage() {}
+
+func (x *CommitTransferResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommitTransferResponse.ProtoReflect.Descriptor instead.
+func (*CommitTransferResponse) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{8}
+}
+
+type AbortTransferRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TransferId    string                 `protobuf:"bytes,1,opt,name=transfer_id,json=transferId,proto3" json:"transfer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AbortTransferRequest) Reset() {
+	*x = AbortTransferRequest{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AbortTransferRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AbortTransferRequest) ProtoMessage() {}
+
+func (x *AbortTransferRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AbortTransferRequest.ProtoReflect.Descriptor instead.
+func (*AbortTransferRequest) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *AbortTransferRequest) GetTransferId() string {
+	if x != nil {
+		return x.TransferId
+	}
+	return ""
+}
+
+type AbortTransferResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AbortTransferResponse) Reset() {
+	*x = AbortTransferResponse{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AbortTransferResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AbortTransferResponse) ProtoMessage() {}
+
+func (x *AbortTransferResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AbortTransferResponse.ProtoReflect.Descriptor instead.
+func (*AbortTransferResponse) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{10}
+}
+
 var File_beanstore_v1_transfer_proto protoreflect.FileDescriptor
 
 const file_beanstore_v1_transfer_proto_rawDesc = "" +
@@ -142,7 +562,35 @@ const file_beanstore_v1_transfer_proto_rawDesc = "" +
 	"\rExportTrailer\x12\x16\n" +
 	"\x06digest\x18\x01 \x01(\fR\x06digest\x12\x1d\n" +
 	"\n" +
-	"size_bytes\x18\x02 \x01(\x04R\tsizeBytesBAZ?github.com/The127/beanstore/client/gen/beanstore/v1;beanstorev1b\x06proto3"
+	"size_bytes\x18\x02 \x01(\x04R\tsizeBytes\"7\n" +
+	"\x14QueryTransferRequest\x12\x1f\n" +
+	"\vtransfer_id\x18\x01 \x01(\tR\n" +
+	"transferId\"8\n" +
+	"\x15QueryTransferResponse\x12\x1f\n" +
+	"\vnext_offset\x18\x01 \x01(\x04R\n" +
+	"nextOffset\"\x7f\n" +
+	"\x0eReceiveRequest\x125\n" +
+	"\x06header\x18\x01 \x01(\v2\x1b.beanstore.v1.ReceiveHeaderH\x00R\x06header\x12+\n" +
+	"\x05frame\x18\x02 \x01(\v2\x13.beanstore.v1.FrameH\x00R\x05frameB\t\n" +
+	"\acontent\"0\n" +
+	"\rReceiveHeader\x12\x1f\n" +
+	"\vtransfer_id\x18\x01 \x01(\tR\n" +
+	"transferId\"\x11\n" +
+	"\x0fReceiveResponse\"P\n" +
+	"\x15CommitTransferRequest\x12\x1f\n" +
+	"\vtransfer_id\x18\x01 \x01(\tR\n" +
+	"transferId\x12\x16\n" +
+	"\x06digest\x18\x02 \x01(\fR\x06digest\"\x18\n" +
+	"\x16CommitTransferResponse\"7\n" +
+	"\x14AbortTransferRequest\x12\x1f\n" +
+	"\vtransfer_id\x18\x01 \x01(\tR\n" +
+	"transferId\"\x17\n" +
+	"\x15AbortTransferResponse2\xec\x02\n" +
+	"\x0fTransferService\x12X\n" +
+	"\rQueryTransfer\x12\".beanstore.v1.QueryTransferRequest\x1a#.beanstore.v1.QueryTransferResponse\x12H\n" +
+	"\aReceive\x12\x1c.beanstore.v1.ReceiveRequest\x1a\x1d.beanstore.v1.ReceiveResponse(\x01\x12[\n" +
+	"\x0eCommitTransfer\x12#.beanstore.v1.CommitTransferRequest\x1a$.beanstore.v1.CommitTransferResponse\x12X\n" +
+	"\rAbortTransfer\x12\".beanstore.v1.AbortTransferRequest\x1a#.beanstore.v1.AbortTransferResponseBAZ?github.com/The127/beanstore/client/gen/beanstore/v1;beanstorev1b\x06proto3"
 
 var (
 	file_beanstore_v1_transfer_proto_rawDescOnce sync.Once
@@ -156,17 +604,36 @@ func file_beanstore_v1_transfer_proto_rawDescGZIP() []byte {
 	return file_beanstore_v1_transfer_proto_rawDescData
 }
 
-var file_beanstore_v1_transfer_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_beanstore_v1_transfer_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_beanstore_v1_transfer_proto_goTypes = []any{
-	(*Frame)(nil),         // 0: beanstore.v1.Frame
-	(*ExportTrailer)(nil), // 1: beanstore.v1.ExportTrailer
+	(*Frame)(nil),                  // 0: beanstore.v1.Frame
+	(*ExportTrailer)(nil),          // 1: beanstore.v1.ExportTrailer
+	(*QueryTransferRequest)(nil),   // 2: beanstore.v1.QueryTransferRequest
+	(*QueryTransferResponse)(nil),  // 3: beanstore.v1.QueryTransferResponse
+	(*ReceiveRequest)(nil),         // 4: beanstore.v1.ReceiveRequest
+	(*ReceiveHeader)(nil),          // 5: beanstore.v1.ReceiveHeader
+	(*ReceiveResponse)(nil),        // 6: beanstore.v1.ReceiveResponse
+	(*CommitTransferRequest)(nil),  // 7: beanstore.v1.CommitTransferRequest
+	(*CommitTransferResponse)(nil), // 8: beanstore.v1.CommitTransferResponse
+	(*AbortTransferRequest)(nil),   // 9: beanstore.v1.AbortTransferRequest
+	(*AbortTransferResponse)(nil),  // 10: beanstore.v1.AbortTransferResponse
 }
 var file_beanstore_v1_transfer_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	5,  // 0: beanstore.v1.ReceiveRequest.header:type_name -> beanstore.v1.ReceiveHeader
+	0,  // 1: beanstore.v1.ReceiveRequest.frame:type_name -> beanstore.v1.Frame
+	2,  // 2: beanstore.v1.TransferService.QueryTransfer:input_type -> beanstore.v1.QueryTransferRequest
+	4,  // 3: beanstore.v1.TransferService.Receive:input_type -> beanstore.v1.ReceiveRequest
+	7,  // 4: beanstore.v1.TransferService.CommitTransfer:input_type -> beanstore.v1.CommitTransferRequest
+	9,  // 5: beanstore.v1.TransferService.AbortTransfer:input_type -> beanstore.v1.AbortTransferRequest
+	3,  // 6: beanstore.v1.TransferService.QueryTransfer:output_type -> beanstore.v1.QueryTransferResponse
+	6,  // 7: beanstore.v1.TransferService.Receive:output_type -> beanstore.v1.ReceiveResponse
+	8,  // 8: beanstore.v1.TransferService.CommitTransfer:output_type -> beanstore.v1.CommitTransferResponse
+	10, // 9: beanstore.v1.TransferService.AbortTransfer:output_type -> beanstore.v1.AbortTransferResponse
+	6,  // [6:10] is the sub-list for method output_type
+	2,  // [2:6] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_beanstore_v1_transfer_proto_init() }
@@ -174,15 +641,19 @@ func file_beanstore_v1_transfer_proto_init() {
 	if File_beanstore_v1_transfer_proto != nil {
 		return
 	}
+	file_beanstore_v1_transfer_proto_msgTypes[4].OneofWrappers = []any{
+		(*ReceiveRequest_Header)(nil),
+		(*ReceiveRequest_Frame)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_beanstore_v1_transfer_proto_rawDesc), len(file_beanstore_v1_transfer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   11,
 			NumExtensions: 0,
-			NumServices:   0,
+			NumServices:   1,
 		},
 		GoTypes:           file_beanstore_v1_transfer_proto_goTypes,
 		DependencyIndexes: file_beanstore_v1_transfer_proto_depIdxs,

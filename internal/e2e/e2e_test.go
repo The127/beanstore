@@ -77,9 +77,19 @@ func loopDevice(t *testing.T) lvm.Device {
 	return loop
 }
 
+// testDaemon is a running daemon stack plus the handles the tests
+// drive it with.
+type testDaemon struct {
+	volumes    beanstorev1.VolumeServiceClient
+	operations beanstorev1.OperationServiceClient
+	transfers  beanstorev1.TransferServiceClient
+	vg         string
+	lvm        *lvm.Client
+}
+
 // daemon brings up the full stack on a real vg: storage setup with
 // pool bootstrap, api, grpc over localhost.
-func daemon(t *testing.T) (beanstorev1.VolumeServiceClient, beanstorev1.OperationServiceClient, string, *lvm.Client) {
+func daemon(t *testing.T) testDaemon {
 	t.Helper()
 
 	loop := loopDevice(t)
@@ -95,10 +105,12 @@ func daemon(t *testing.T) (beanstorev1.VolumeServiceClient, beanstorev1.Operatio
 	})
 
 	cfg := config.Config{
-		VolumeGroup: vg,
-		ThinPool:    "pool0",
-		CreatePool:  true,
-		PoolSize:    config.PoolSize{Bytes: 256 << 20},
+		VolumeGroup:         vg,
+		ThinPool:            "pool0",
+		CreatePool:          true,
+		PoolSize:            config.PoolSize{Bytes: 256 << 20},
+		MaxInboundTransfers: 2,
+		TransferGrace:       time.Minute,
 	}
 	require.NoError(t, storage.Setup(ctx, client, cfg))
 
@@ -118,7 +130,13 @@ func daemon(t *testing.T) (beanstorev1.VolumeServiceClient, beanstorev1.Operatio
 		_ = conn.Close()
 	})
 
-	return beanstorev1.NewVolumeServiceClient(conn), beanstorev1.NewOperationServiceClient(conn), vg, client
+	return testDaemon{
+		volumes:    beanstorev1.NewVolumeServiceClient(conn),
+		operations: beanstorev1.NewOperationServiceClient(conn),
+		transfers:  beanstorev1.NewTransferServiceClient(conn),
+		vg:         vg,
+		lvm:        client,
+	}
 }
 
 func waitDone(t *testing.T, operations beanstorev1.OperationServiceClient, id string) {
@@ -168,18 +186,23 @@ func TestIntegrationRecovery(t *testing.T) {
 		AddTags:  []string{storage.StateTag(storage.StateAttached)},
 		Activate: lvm.Bool(false),
 	}))
+	require.NoError(t, client.CreateThinVolume(ctx, vg, "pool0", "vol-incoming", 16<<20, lvm.CreateThinVolumeOptions{
+		AddTags:  []string{storage.StateTag(storage.StateIncoming), "beanstore.transfer=tr-9"},
+		Activate: lvm.Bool(false),
+	}))
 
 	require.NoError(t, storage.Recover(ctx, client, cfg))
 
 	volumes, err := storage.ListVolumes(ctx, client, cfg)
 	require.NoError(t, err)
-	require.Len(t, volumes, 1, "the creating volume is gone")
+	require.Len(t, volumes, 1, "the creating and incoming volumes are gone")
 	assert.Equal(t, "vol-attached", volumes[0].ID)
 	assert.NotEmpty(t, volumes[0].Path, "re-activated")
 }
 
 func TestIntegrationExport(t *testing.T) {
-	volumes, operations, vg, lvmClient := daemon(t)
+	node := daemon(t)
+	volumes, operations, vg, lvmClient := node.volumes, node.operations, node.vg, node.lvm
 	ctx := t.Context()
 
 	_, err := volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
@@ -248,8 +271,128 @@ func TestIntegrationExport(t *testing.T) {
 	require.NoError(t, err, "the finished export released the snapshot")
 }
 
+// export pulls the snapshot's full frame stream after granting the
+// unprivileged daemon device read access.
+func export(t *testing.T, node testDaemon, snapshotID string) ([]*beanstorev1.Frame, *beanstorev1.ExportTrailer) {
+	t.Helper()
+	ctx := t.Context()
+
+	require.NoError(t, node.lvm.ActivateLogicalVolume(ctx, lvm.Name(node.vg+"/"+snapshotID), lvm.ActivateLogicalVolumeOptions{
+		IgnoreActivationSkip: true,
+	}))
+	require.NoError(t, sudoRun(ctx, "chmod", "o+r", "/dev/"+node.vg+"/"+snapshotID))
+
+	stream, err := node.volumes.Export(ctx, &beanstorev1.ExportRequest{SnapshotId: snapshotID})
+	require.NoError(t, err)
+
+	var frames []*beanstorev1.Frame
+	for {
+		response, err := stream.Recv()
+		require.NoError(t, err, "stream ended without trailer")
+		if trailer := response.GetTrailer(); trailer != nil {
+			return frames, trailer
+		}
+		frames = append(frames, response.GetFrame())
+	}
+}
+
+func TestIntegrationTransferLoopback(t *testing.T) {
+	node := daemon(t)
+	ctx := t.Context()
+
+	_, err := node.volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
+		VolumeId:    "vol-1",
+		SizeBytes:   16 << 20,
+		OperationId: "op-create",
+	})
+	require.NoError(t, err)
+	waitDone(t, node.operations, "op-create")
+
+	attach, err := node.volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "vol-1"})
+	require.NoError(t, err)
+
+	pattern := filepath.Join(t.TempDir(), "pattern")
+	patternBytes := make([]byte, 3<<20)
+	for i := range patternBytes {
+		patternBytes[i] = byte(i % 253)
+	}
+	require.NoError(t, os.WriteFile(pattern, patternBytes, 0o600))
+	require.NoError(t, sudoRun(ctx, "dd", "if="+pattern, "of="+attach.DevicePath, "bs=1M", "conv=fsync"))
+
+	_, err = node.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-1",
+	})
+	require.NoError(t, err)
+	frames, trailer := export(t, node, "snap-1")
+
+	_, err = node.volumes.PrepareReceive(ctx, &beanstorev1.PrepareReceiveRequest{
+		VolumeId:   "vol-1",
+		SizeBytes:  trailer.SizeBytes,
+		TransferId: "tr-collide",
+	})
+	assert.Equal(t, codes.AlreadyExists, status.Code(err), "the lv name is taken")
+
+	_, err = node.volumes.PrepareReceive(ctx, &beanstorev1.PrepareReceiveRequest{
+		VolumeId:   "vol-2",
+		SizeBytes:  trailer.SizeBytes,
+		TransferId: "tr-1",
+	})
+	require.NoError(t, err)
+	// the unprivileged daemon needs write access to the incoming device
+	require.NoError(t, sudoRun(ctx, "chmod", "o+rw", "/dev/"+node.vg+"/vol-2"))
+
+	query, err := node.transfers.QueryTransfer(ctx, &beanstorev1.QueryTransferRequest{TransferId: "tr-1"})
+	require.NoError(t, err)
+	assert.Zero(t, query.NextOffset)
+
+	stream, err := node.transfers.Receive(ctx)
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(&beanstorev1.ReceiveRequest{
+		Content: &beanstorev1.ReceiveRequest_Header{Header: &beanstorev1.ReceiveHeader{TransferId: "tr-1"}},
+	}))
+	for _, frame := range frames {
+		require.NoError(t, stream.Send(&beanstorev1.ReceiveRequest{
+			Content: &beanstorev1.ReceiveRequest_Frame{Frame: frame},
+		}))
+	}
+	_, err = stream.CloseAndRecv()
+	require.NoError(t, err)
+
+	_, err = node.transfers.CommitTransfer(ctx, &beanstorev1.CommitTransferRequest{
+		TransferId: "tr-1",
+		Digest:     trailer.Digest,
+	})
+	require.NoError(t, err)
+
+	list, err := node.volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	states := map[string]beanstorev1.VolumeState{}
+	for _, volume := range list.Volumes {
+		states[volume.VolumeId] = volume.State
+	}
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_READY, states["vol-2"])
+
+	// the content digest is framing independent, re-exporting the copy
+	// must reproduce it exactly
+	_, err = node.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-2",
+		SnapshotId: "snap-2",
+	})
+	require.NoError(t, err)
+	_, copyTrailer := export(t, node, "snap-2")
+	assert.Equal(t, trailer.Digest, copyTrailer.Digest, "the received volume matches the source")
+
+	_, err = node.transfers.AbortTransfer(ctx, &beanstorev1.AbortTransferRequest{TransferId: "tr-1"})
+	require.NoError(t, err, "abort is idempotent")
+
+	_, err = node.transfers.QueryTransfer(ctx, &beanstorev1.QueryTransferRequest{TransferId: "tr-1"})
+	assert.Equal(t, codes.NotFound, status.Code(err), "finished transfers are dead")
+}
+
 func TestIntegrationDaemonLifecycle(t *testing.T) {
-	volumes, operations, _, _ := daemon(t)
+	node := daemon(t)
+	volumes, operations := node.volumes, node.operations
 	ctx := t.Context()
 
 	_, err := volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{

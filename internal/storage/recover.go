@@ -56,9 +56,19 @@ func Recover(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 			}
 			log.Info("deactivated stray active snapshot", "volume", volume.ID)
 
+		case StateIncoming:
+			// no transfer session survives a restart
+			err = DestroyIncoming(ctx, client, cfg, volume.ID)
+			if err != nil {
+				log.Error("removing incoming volume during recovery",
+					"volume", volume.ID, "error", err)
+				continue
+			}
+			log.Info("removed incoming volume during recovery", "volume", volume.ID)
+
 		case StateReady:
 
-		case StatePushing, StateIncoming, StateRetired, StateUnknown:
+		case StatePushing, StateRetired, StateUnknown:
 			log.Warn("volume not covered by recovery",
 				"volume", volume.ID, "state", string(volume.State))
 		}

@@ -19,3 +19,60 @@ message ExportTrailer {
   bytes digest = 1;
   uint64 size_bytes = 2;
 }
+
+// TransferService is the node to node data plane. Transfer ids are
+// minted by the caller and single use, a retry after any failure is a
+// new id and a new PrepareReceive.
+service TransferService {
+  // QueryTransfer answers where a live transfer's stream continues.
+  // NOT_FOUND means the transfer is dead, never resend on its id.
+  rpc QueryTransfer(QueryTransferRequest) returns (QueryTransferResponse);
+
+  // Receive streams frames into a prepared transfer. One stream at a
+  // time per transfer, a reconnect continues at the queried offset.
+  rpc Receive(stream ReceiveRequest) returns (ReceiveResponse);
+
+  // CommitTransfer verifies the digest and turns the INCOMING volume
+  // READY. A digest mismatch answers DATA_LOSS.
+  rpc CommitTransfer(CommitTransferRequest) returns (CommitTransferResponse);
+
+  // AbortTransfer destroys the transfer and its volume. Idempotent,
+  // aborting an unknown or finished transfer succeeds.
+  rpc AbortTransfer(AbortTransferRequest) returns (AbortTransferResponse);
+}
+
+message QueryTransferRequest {
+  string transfer_id = 1;
+}
+
+message QueryTransferResponse {
+  // next_offset is where the frame stream continues.
+  uint64 next_offset = 1;
+}
+
+message ReceiveRequest {
+  oneof content {
+    // header names the transfer, it must be the first message.
+    ReceiveHeader header = 1;
+    Frame frame = 2;
+  }
+}
+
+message ReceiveHeader {
+  string transfer_id = 1;
+}
+
+message ReceiveResponse {}
+
+message CommitTransferRequest {
+  string transfer_id = 1;
+  bytes digest = 2;
+}
+
+message CommitTransferResponse {}
+
+message AbortTransferRequest {
+  string transfer_id = 1;
+}
+
+message AbortTransferResponse {}

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"io"
 	"regexp"
 	"runtime/debug"
 
@@ -20,10 +21,11 @@ import (
 
 type volumeServiceServer struct {
 	beanstorev1.UnimplementedVolumeServiceServer
-	lvm  *lvm.Client
-	cfg  config.Config
-	ops  *operations.Table
-	pins *storage.ExportPins
+	lvm       *lvm.Client
+	cfg       config.Config
+	ops       *operations.Table
+	pins      *storage.ExportPins
+	transfers *storage.Transfers
 	// background outlives requests, long-running operations run on it.
 	background context.Context
 }
@@ -33,15 +35,23 @@ type operationServiceServer struct {
 	ops *operations.Table
 }
 
+type transferServiceServer struct {
+	beanstorev1.UnimplementedTransferServiceServer
+	transfers *storage.Transfers
+}
+
 // Register wires all beanstore services onto the given grpc server.
 // The context must outlive the server, long-running operations run on
 // it.
 func Register(ctx context.Context, server *grpc.Server, client *lvm.Client, cfg config.Config) {
 	ops := operations.NewTable()
+	transfers := storage.NewTransfers(ctx, client, cfg)
 	beanstorev1.RegisterVolumeServiceServer(server, &volumeServiceServer{
-		lvm: client, cfg: cfg, ops: ops, pins: storage.NewExportPins(), background: ctx,
+		lvm: client, cfg: cfg, ops: ops, pins: storage.NewExportPins(),
+		transfers: transfers, background: ctx,
 	})
 	beanstorev1.RegisterOperationServiceServer(server, &operationServiceServer{ops: ops})
+	beanstorev1.RegisterTransferServiceServer(server, &transferServiceServer{transfers: transfers})
 }
 
 // volumeIDPattern is the lv name charset, minus a leading dash or dot.
@@ -322,6 +332,124 @@ func (s *volumeServiceServer) releaseExport(id string) {
 		lvm.Name(s.cfg.VolumeGroup+"/"+id), lvm.DeactivateLogicalVolumeOptions{})
 	if err != nil && !errors.Is(err, lvm.ErrInUse) && !errors.Is(err, lvm.ErrNotFound) {
 		logging.FromContext(s.background).Error("deactivating exported snapshot", "snapshot", id, "error", err)
+	}
+}
+
+func (s *volumeServiceServer) PrepareReceive(ctx context.Context, request *beanstorev1.PrepareReceiveRequest) (*beanstorev1.PrepareReceiveResponse, error) {
+	if !volumeIDPattern.MatchString(request.VolumeId) {
+		return nil, status.Error(codes.InvalidArgument, "volume_id is not a valid lv name")
+	}
+	if !volumeIDPattern.MatchString(request.TransferId) {
+		return nil, status.Error(codes.InvalidArgument, "transfer_id is not a valid tag value")
+	}
+	if request.SizeBytes == 0 {
+		return nil, status.Error(codes.InvalidArgument, "size_bytes must be set")
+	}
+
+	existing, err := storage.GetVolume(ctx, s.lvm, s.cfg, request.VolumeId)
+	switch {
+	case err == nil:
+		return nil, status.Error(codes.AlreadyExists,
+			(&storage.WrongStateError{Volume: request.VolumeId, Found: existing.State}).Error())
+
+	case !errors.Is(err, storage.ErrNotFound):
+		return nil, volumeError(ctx, err, "prepare lookup failed")
+	}
+
+	err = s.transfers.PrepareReceive(ctx, request.TransferId, request.VolumeId, request.SizeBytes)
+	if err != nil {
+		return nil, transferError(ctx, err, "preparing transfer failed")
+	}
+
+	return &beanstorev1.PrepareReceiveResponse{}, nil
+}
+
+func (s *transferServiceServer) QueryTransfer(_ context.Context, request *beanstorev1.QueryTransferRequest) (*beanstorev1.QueryTransferResponse, error) {
+	offset, err := s.transfers.NextOffset(request.TransferId)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "unknown transfer")
+	}
+
+	return &beanstorev1.QueryTransferResponse{NextOffset: offset}, nil
+}
+
+func (s *transferServiceServer) Receive(stream grpc.ClientStreamingServer[beanstorev1.ReceiveRequest, beanstorev1.ReceiveResponse]) error {
+	first, err := stream.Recv()
+	if err != nil {
+		return status.Error(codes.InvalidArgument, "the stream must start with a header")
+	}
+	header := first.GetHeader()
+	if header == nil {
+		return status.Error(codes.InvalidArgument, "the stream must start with a header")
+	}
+
+	err = s.transfers.Attach(header.TransferId)
+	if err != nil {
+		return transferError(stream.Context(), err, "attaching stream failed")
+	}
+	defer s.transfers.Detach(header.TransferId)
+
+	for {
+		request, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return stream.SendAndClose(&beanstorev1.ReceiveResponse{})
+		}
+		if err != nil {
+			return err
+		}
+
+		frame := request.GetFrame()
+		if frame == nil {
+			return status.Error(codes.InvalidArgument, "expected a frame")
+		}
+
+		err = s.transfers.Write(header.TransferId, frame.Offset, frame.Data)
+		if err != nil {
+			return transferError(stream.Context(), err, "writing frame failed")
+		}
+	}
+}
+
+func (s *transferServiceServer) CommitTransfer(ctx context.Context, request *beanstorev1.CommitTransferRequest) (*beanstorev1.CommitTransferResponse, error) {
+	err := s.transfers.Commit(ctx, request.TransferId, request.Digest)
+	if err != nil {
+		return nil, transferError(ctx, err, "committing transfer failed")
+	}
+
+	return &beanstorev1.CommitTransferResponse{}, nil
+}
+
+func (s *transferServiceServer) AbortTransfer(_ context.Context, request *beanstorev1.AbortTransferRequest) (*beanstorev1.AbortTransferResponse, error) {
+	s.transfers.Abort(request.TransferId)
+
+	return &beanstorev1.AbortTransferResponse{}, nil
+}
+
+// transferError maps transfer errors onto grpc codes. Internal
+// failures are logged and answered without detail.
+func transferError(ctx context.Context, err error, message string) error {
+	switch {
+	case errors.Is(err, storage.ErrTransferLimit):
+		return status.Error(codes.ResourceExhausted, err.Error())
+
+	case errors.Is(err, storage.ErrTransferUsed):
+		return status.Error(codes.AlreadyExists, err.Error())
+
+	case errors.Is(err, storage.ErrTransferUnknown):
+		return status.Error(codes.NotFound, "unknown transfer")
+
+	case errors.Is(err, storage.ErrTransferBusy):
+		return status.Error(codes.Aborted, err.Error())
+
+	case errors.Is(err, storage.ErrBadFrame):
+		return status.Error(codes.InvalidArgument, err.Error())
+
+	case errors.Is(err, storage.ErrDigestMismatch):
+		return status.Error(codes.DataLoss, err.Error())
+
+	default:
+		logging.FromContext(ctx).Error(message, "error", err)
+		return status.Error(codes.Internal, message)
 	}
 }
 

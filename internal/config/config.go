@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/confmap"
@@ -30,6 +31,11 @@ type Config struct {
 	CreatePool bool
 	// PoolSize is the size of a pool created at startup.
 	PoolSize PoolSize
+	// MaxInboundTransfers limits concurrent inbound transfers.
+	MaxInboundTransfers int
+	// TransferGrace is how long a dropped transfer stream may resume
+	// before the transfer is destroyed.
+	TransferGrace time.Duration
 }
 
 // PoolSize is a thin pool bootstrap size: a byte count, or a
@@ -40,17 +46,21 @@ type PoolSize struct {
 }
 
 type rawConfig struct {
-	ListenAddress string `koanf:"listen_address"`
-	LogLevel      string `koanf:"log_level"`
-	VolumeGroup   string `koanf:"volume_group"`
-	ThinPool      string `koanf:"thin_pool"`
-	CreatePool    bool   `koanf:"create_pool"`
-	PoolSize      string `koanf:"pool_size"`
+	ListenAddress       string `koanf:"listen_address"`
+	LogLevel            string `koanf:"log_level"`
+	VolumeGroup         string `koanf:"volume_group"`
+	ThinPool            string `koanf:"thin_pool"`
+	CreatePool          bool   `koanf:"create_pool"`
+	PoolSize            string `koanf:"pool_size"`
+	MaxInboundTransfers int    `koanf:"max_inbound_transfers"`
+	TransferGrace       string `koanf:"transfer_grace"`
 }
 
 var defaults = map[string]any{
-	"listen_address": "127.0.0.1:50051",
-	"log_level":      "info",
+	"listen_address":        "127.0.0.1:50051",
+	"log_level":             "info",
+	"max_inbound_transfers": 4,
+	"transfer_grace":        "60s",
 }
 
 // Load reads the configuration. An empty path skips the file layer. A
@@ -117,13 +127,23 @@ func validate(raw rawConfig) (Config, error) {
 		return Config{}, errors.New("pool_size requires create_pool")
 	}
 
+	if raw.MaxInboundTransfers <= 0 {
+		return Config{}, errors.New("max_inbound_transfers must be positive")
+	}
+	grace, err := time.ParseDuration(raw.TransferGrace)
+	if err != nil || grace <= 0 {
+		return Config{}, fmt.Errorf("transfer_grace must be a positive duration: %q", raw.TransferGrace)
+	}
+
 	return Config{
-		ListenAddress: raw.ListenAddress,
-		LogLevel:      level,
-		VolumeGroup:   raw.VolumeGroup,
-		ThinPool:      raw.ThinPool,
-		CreatePool:    raw.CreatePool,
-		PoolSize:      poolSize,
+		ListenAddress:       raw.ListenAddress,
+		LogLevel:            level,
+		VolumeGroup:         raw.VolumeGroup,
+		ThinPool:            raw.ThinPool,
+		CreatePool:          raw.CreatePool,
+		PoolSize:            poolSize,
+		MaxInboundTransfers: raw.MaxInboundTransfers,
+		TransferGrace:       grace,
 	}, nil
 }
 

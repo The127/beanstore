@@ -263,7 +263,7 @@ func TestListLogicalVolumesBuildsCommandAndParses(t *testing.T) {
 		"--units", "b",
 		"--nosuffix",
 		"--binary",
-		"-o", "lv_name,lv_uuid,vg_name,lv_size,lv_metadata_size,lv_attr,lv_tags,pool_lv,origin," +
+		"-o", "lv_name,lv_uuid,vg_name,lv_size,lv_metadata_size,chunk_size,lv_attr,lv_tags,pool_lv,origin," +
 			"lv_path,lv_dm_path,data_percent,metadata_percent,lv_active,lv_layout",
 		"-S", "lv_tags = {beanstore}",
 		"vg0",

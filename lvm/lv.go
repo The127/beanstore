@@ -18,16 +18,19 @@ type LogicalVolume struct {
 	// MetadataSizeBytes is the metadata lv size, zero for lvs without
 	// one.
 	MetadataSizeBytes uint64
-	Attributes        string
-	Tags              []string
-	Pool              string
-	Origin            string
-	Path              string
-	DevicePath        string
-	DataPercent       float64
-	MetadataPercent   float64
-	Active            bool
-	Layout            []string
+	// ChunkSizeBytes is the pool or snapshot chunk size, zero for lvs
+	// without one.
+	ChunkSizeBytes  uint64
+	Attributes      string
+	Tags            []string
+	Pool            string
+	Origin          string
+	Path            string
+	DevicePath      string
+	DataPercent     float64
+	MetadataPercent float64
+	Active          bool
+	Layout          []string
 }
 
 // CreateLogicalVolumeOptions configures CreateLogicalVolume.
@@ -479,7 +482,7 @@ func (c *Client) ListLogicalVolumes(ctx context.Context, opts ListLogicalVolumes
 		"--units", "b",
 		"--nosuffix",
 		"--binary",
-		"-o", "lv_name,lv_uuid,vg_name,lv_size,lv_metadata_size,lv_attr,lv_tags,pool_lv,origin,"+
+		"-o", "lv_name,lv_uuid,vg_name,lv_size,lv_metadata_size,chunk_size,lv_attr,lv_tags,pool_lv,origin,"+
 			"lv_path,lv_dm_path,data_percent,metadata_percent,lv_active,lv_layout",
 	)
 	if opts.All {
@@ -547,6 +550,7 @@ type rawLV struct {
 	VG              string `json:"vg_name"`
 	Size            string `json:"lv_size"`
 	MetadataSize    string `json:"lv_metadata_size"`
+	ChunkSize       string `json:"chunk_size"`
 	Attr            string `json:"lv_attr"`
 	Tags            string `json:"lv_tags"`
 	Pool            string `json:"pool_lv"`
@@ -591,6 +595,14 @@ func parseLVReport(output []byte) ([]LogicalVolume, error) {
 			}
 		}
 
+		chunkSize := uint64(0)
+		if lv.ChunkSize != "" {
+			chunkSize, err = strconv.ParseUint(lv.ChunkSize, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing chunk size of %s/%s: %w", lv.VG, lv.Name, err)
+			}
+		}
+
 		dataPercent, err := parsePercent(lv.DataPercent)
 		if err != nil {
 			return nil, fmt.Errorf("parsing data percent of %s/%s: %w", lv.VG, lv.Name, err)
@@ -607,6 +619,7 @@ func parseLVReport(output []byte) ([]LogicalVolume, error) {
 			VolumeGroup:       lv.VG,
 			SizeBytes:         size,
 			MetadataSizeBytes: metadataSize,
+			ChunkSizeBytes:    chunkSize,
 			Attributes:        lv.Attr,
 			Tags:              splitList(lv.Tags),
 			Pool:              lv.Pool,

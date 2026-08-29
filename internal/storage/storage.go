@@ -37,7 +37,7 @@ func Setup(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 			return fmt.Errorf("%s/%s exists but is not a thin pool", cfg.VolumeGroup, cfg.ThinPool)
 		}
 
-		return nil
+		return checkChunkSize(pools[0])
 	}
 
 	if !cfg.CreatePool {
@@ -56,6 +56,27 @@ func Setup(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 
 	logging.FromContext(ctx).Info("created thin pool",
 		"vg", cfg.VolumeGroup, "pool", cfg.ThinPool, "bytes", size)
+
+	pools, err = client.ListLogicalVolumes(ctx, lvm.ListLogicalVolumesOptions{
+		VG:     cfg.VolumeGroup,
+		Select: lvm.Select("lv_name = " + cfg.ThinPool),
+	})
+	if err != nil || len(pools) == 0 {
+		return fmt.Errorf("reading created pool %s/%s: %w", cfg.VolumeGroup, cfg.ThinPool, err)
+	}
+
+	return checkChunkSize(pools[0])
+}
+
+// checkChunkSize refuses pools whose chunk size does not divide the
+// transfer chunk. A transfer frame partially covering a pool chunk
+// would otherwise expose stale pool data on pools without zeroing.
+// The refusal is conservative, it also covers pools with zeroing on.
+func checkChunkSize(pool lvm.LogicalVolume) error {
+	if pool.ChunkSizeBytes == 0 || TransferChunkBytes%pool.ChunkSizeBytes != 0 {
+		return fmt.Errorf("pool chunk size %d does not divide the %d byte transfer chunk, transfers would be unsafe",
+			pool.ChunkSizeBytes, TransferChunkBytes)
+	}
 
 	return nil
 }

@@ -36,8 +36,8 @@ func (b *DigestBuilder) AddChunk(data []byte) {
 }
 
 // AddZeroChunk hashes a skipped all-zero chunk of the given length.
-func (b *DigestBuilder) AddZeroChunk(length int) {
-	if length == TransferChunkBytes {
+func (b *DigestBuilder) AddZeroChunk(length uint64) {
+	if length >= TransferChunkBytes {
 		b.outer.Write(zeroChunkHash())
 		return
 	}

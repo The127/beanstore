@@ -57,7 +57,7 @@ func ReadDevice(ctx context.Context, path string, sink func(Frame) error) (uint6
 		}
 
 		if bytes.Equal(chunk, zeroChunk[:len(chunk)]) {
-			builder.AddZeroChunk(len(chunk))
+			builder.AddZeroChunk(uint64(len(chunk)))
 			continue
 		}
 
