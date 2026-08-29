@@ -395,3 +395,49 @@ func TestIntegrationVolumeGroupLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, vgs)
 }
+
+func TestIntegrationVolumeGroupMembership(t *testing.T) {
+	first := loopDevice(t)
+	second := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(first, second))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, first, CreatePhysicalVolumeOptions{}))
+	name := vgFor(t, first)
+
+	require.NoError(t, client.ExtendVolumeGroup(ctx, name, []Device{second}, ExtendVolumeGroupOptions{}))
+
+	vgs, err := client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{})
+	require.NoError(t, err)
+	require.Len(t, vgs, 1)
+	assert.Equal(t, uint64(2), vgs[0].PVCount)
+
+	require.NoError(t, client.ReduceVolumeGroup(ctx, name, []Device{second}, ReduceVolumeGroupOptions{}))
+
+	vgs, err = client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(1), vgs[0].PVCount)
+}
+
+func TestIntegrationVolumeGroupRename(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	name := vgFor(t, loop)
+	renamed := name + "-renamed"
+	t.Cleanup(func() {
+		//nolint:usetesting // t.Context is done during cleanup
+		_ = client.RemoveVolumeGroup(context.Background(), renamed, RemoveVolumeGroupOptions{Force: true})
+	})
+
+	require.NoError(t, client.RenameVolumeGroup(ctx, name, renamed, RenameVolumeGroupOptions{}))
+
+	vgs, err := client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{})
+	require.NoError(t, err)
+	require.Len(t, vgs, 1)
+	assert.Equal(t, renamed, vgs[0].Name)
+
+	require.NoError(t, client.RenameVolumeGroup(ctx, renamed, name, RenameVolumeGroupOptions{}))
+}

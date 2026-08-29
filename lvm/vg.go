@@ -3,6 +3,7 @@ package lvm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -92,7 +93,7 @@ func (c *Client) ListVolumeGroups(ctx context.Context, opts ListVolumeGroupsOpti
 		"--nosuffix",
 		"--binary",
 		"-o", "vg_name,vg_uuid,vg_size,vg_free,vg_extent_size,vg_extent_count,"+
-			"vg_free_count,pv_count,lv_count,snap_count,vg_missing_pv_count,"+
+			"vg_free_count,pv_count,lnextv_count,snap_count,vg_missing_pv_count,"+
 			"vg_tags,vg_attr,vg_exported,vg_partial,vg_shared,vg_autoactivation",
 	)
 	if opts.Select != "" {
@@ -216,4 +217,108 @@ func parseVGReport(output []byte) ([]VolumeGroup, error) {
 	}
 
 	return groups, nil
+}
+
+// ExtendVolumeGroupOptions configures ExtendVolumeGroup.
+type ExtendVolumeGroupOptions struct {
+	CommonOptions
+	// Force initializes member pvs without confirmation, wiping
+	// recognizable signatures on the devices.
+	Force bool
+	// RestoreMissing readds a pv that was missing and reappeared,
+	// instead of adding it as a new pv.
+	RestoreMissing bool
+}
+
+// ExtendVolumeGroup adds the given devices to the vg, initializing them
+// as pvs where needed.
+func (c *Client) ExtendVolumeGroup(ctx context.Context, name string, devices []Device, opts ExtendVolumeGroupOptions) error {
+	cmd := c.metadataCommand("vgextend", opts.CommonOptions)
+	if opts.Force {
+		cmd = cmd.Append("-f")
+	}
+	if opts.RestoreMissing {
+		cmd = cmd.Append("--restoremissing")
+	}
+	cmd = cmd.Append(name)
+	for _, device := range devices {
+		cmd = cmd.Append(string(device))
+	}
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("extending volume group %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// ReduceVolumeGroupOptions configures ReduceVolumeGroup.
+type ReduceVolumeGroupOptions struct {
+	CommonOptions
+	// RemoveUnused removes all pvs without allocated extents instead of
+	// named devices.
+	RemoveUnused bool
+	// RemoveMissing removes all missing pvs instead of named devices,
+	// making a partial vg consistent again.
+	RemoveMissing bool
+	// Force also removes lvs affected by removed missing pvs.
+	Force bool
+}
+
+// ReduceVolumeGroup removes pvs from the vg: the given devices, or per
+// options all unused or all missing pvs.
+func (c *Client) ReduceVolumeGroup(ctx context.Context, name string, devices []Device, opts ReduceVolumeGroupOptions) error {
+	forms := 0
+	if len(devices) > 0 {
+		forms++
+	}
+	if opts.RemoveUnused {
+		forms++
+	}
+	if opts.RemoveMissing {
+		forms++
+	}
+	if forms != 1 {
+		return errors.New("reducing a volume group requires exactly one of devices, RemoveUnused or RemoveMissing")
+	}
+
+	cmd := c.metadataCommand("vgreduce", opts.CommonOptions)
+	if opts.RemoveUnused {
+		cmd = cmd.Append("-a")
+	}
+	if opts.RemoveMissing {
+		cmd = cmd.Append("--removemissing")
+	}
+	if opts.Force {
+		cmd = cmd.Append("-f")
+	}
+	cmd = cmd.Append(name)
+	for _, device := range devices {
+		cmd = cmd.Append(string(device))
+	}
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("reducing volume group %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// RenameVolumeGroupOptions configures RenameVolumeGroup.
+type RenameVolumeGroupOptions struct {
+	CommonOptions
+}
+
+// RenameVolumeGroup renames the vg addressed by name or UUID.
+func (c *Client) RenameVolumeGroup(ctx context.Context, oldName, newName string, opts RenameVolumeGroupOptions) error {
+	cmd := c.metadataCommand("vgrename", opts.CommonOptions).Append(oldName, newName)
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("renaming volume group %s to %s: %w", oldName, newName, err)
+	}
+
+	return nil
 }

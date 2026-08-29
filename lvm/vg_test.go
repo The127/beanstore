@@ -112,3 +112,69 @@ func TestVolumeGroupAutobackupOnPlainCommandsFails(t *testing.T) {
 	assert.ErrorIs(t, err, errAutobackupNotSupported)
 	assert.Empty(t, fake.calls)
 }
+
+func TestExtendVolumeGroupBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ExtendVolumeGroup(t.Context(), "vg0", []Device{"/dev/loop1"}, ExtendVolumeGroupOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"vgextend", "vg0", "/dev/loop1"}, fake.calls[0].Args())
+}
+
+func TestExtendVolumeGroupFlags(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ExtendVolumeGroup(t.Context(), "vg0", []Device{"/dev/loop1"}, ExtendVolumeGroupOptions{
+		Force:          true,
+		RestoreMissing: true,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"vgextend", "-f", "--restoremissing", "vg0", "/dev/loop1"}, fake.calls[0].Args())
+}
+
+func TestReduceVolumeGroupByDevices(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ReduceVolumeGroup(t.Context(), "vg0", []Device{"/dev/loop1"}, ReduceVolumeGroupOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"vgreduce", "vg0", "/dev/loop1"}, fake.calls[0].Args())
+}
+
+func TestReduceVolumeGroupForms(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.ReduceVolumeGroup(t.Context(), "vg0", nil, ReduceVolumeGroupOptions{RemoveUnused: true}))
+	require.NoError(t, client.ReduceVolumeGroup(t.Context(), "vg0", nil, ReduceVolumeGroupOptions{RemoveMissing: true, Force: true}))
+
+	assert.Equal(t, []string{"vgreduce", "-a", "vg0"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"vgreduce", "--removemissing", "-f", "vg0"}, fake.calls[1].Args())
+}
+
+func TestReduceVolumeGroupRequiresExactlyOneForm(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ReduceVolumeGroup(t.Context(), "vg0", nil, ReduceVolumeGroupOptions{})
+	assert.ErrorContains(t, err, "exactly one")
+
+	err = client.ReduceVolumeGroup(t.Context(), "vg0", []Device{"/dev/loop1"}, ReduceVolumeGroupOptions{RemoveUnused: true})
+	assert.ErrorContains(t, err, "exactly one")
+	assert.Empty(t, fake.calls)
+}
+
+func TestRenameVolumeGroupBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.RenameVolumeGroup(t.Context(), "vg0", "vg1", RenameVolumeGroupOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"vgrename", "vg0", "vg1"}, fake.calls[0].Args())
+}
