@@ -161,6 +161,38 @@ func TestChangeLogicalVolumeBuildsCommand(t *testing.T) {
 	}, fake.calls[0].Args())
 }
 
+func TestChangeLogicalVolumePropertiesBuildCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ChangeLogicalVolume(t.Context(), Name("vg0/vol1"), ChangeLogicalVolumeOptions{
+		Permission:        PermissionReadOnly,
+		Contiguous:        Bool(true),
+		Zero:              Bool(false),
+		Discards:          DiscardsNoPassdown,
+		ErrorWhenFull:     Bool(true),
+		SetActivationSkip: Bool(true),
+		Readahead:         ReadaheadSectors(256),
+		Allocation:        AllocationAnywhere,
+		SetAutoactivation: Bool(false),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"lvchange",
+		"-p", "r",
+		"-C", "y",
+		"-Z", "n",
+		"--discards", "nopassdown",
+		"--errorwhenfull", "y",
+		"-k", "y",
+		"-r", "256",
+		"--alloc", "anywhere",
+		"--setautoactivation", "n",
+		"vg0/vol1",
+	}, fake.calls[0].Args())
+}
+
 func TestChangeLogicalVolumeRequiresAProperty(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))

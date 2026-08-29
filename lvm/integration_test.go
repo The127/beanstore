@@ -690,6 +690,55 @@ func TestIntegrationLogicalVolumeResizeAndRename(t *testing.T) {
 	require.NoError(t, client.ScanLogicalVolumes(ctx, ScanLogicalVolumesOptions{}))
 }
 
+func TestIntegrationLogicalVolumeChangeProperties(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	vg := vgFor(t, loop)
+
+	require.NoError(t, client.CreateThinPool(ctx, vg, "pool0", 256<<20, CreateThinPoolOptions{}))
+	require.NoError(t, client.CreateThinVolume(ctx, vg, "pool0", "vol1", 64<<20, CreateThinVolumeOptions{}))
+
+	require.NoError(t, client.ChangeLogicalVolume(ctx, Name(vg+"/pool0"), ChangeLogicalVolumeOptions{
+		Zero:          Bool(false),
+		Discards:      DiscardsNoPassdown,
+		ErrorWhenFull: Bool(true),
+	}))
+	// lv_attr char 8 is z when the pool zeroes new blocks
+	assert.Equal(t, byte('-'), lvByName(t, client, vg, "pool0").Attributes[7])
+
+	require.NoError(t, client.ChangeLogicalVolume(ctx, Name(vg+"/vol1"), ChangeLogicalVolumeOptions{
+		Permission:        PermissionReadOnly,
+		SetActivationSkip: Bool(true),
+		Readahead:         ReadaheadNone,
+		SetAutoactivation: Bool(false),
+	}))
+	vol := lvByName(t, client, vg, "vol1")
+	// lv_attr char 2 is the permission, char 10 is k for activation skip
+	assert.Equal(t, byte('r'), vol.Attributes[1])
+	assert.Equal(t, byte('k'), vol.Attributes[9])
+
+	require.NoError(t, client.ChangeLogicalVolume(ctx, Name(vg+"/vol1"), ChangeLogicalVolumeOptions{
+		Permission:        PermissionReadWrite,
+		SetActivationSkip: Bool(false),
+	}))
+	assert.Equal(t, byte('w'), lvByName(t, client, vg, "vol1").Attributes[1])
+
+	require.NoError(t, client.CreateLogicalVolume(ctx, vg, "lv0", 32<<20, CreateLogicalVolumeOptions{}))
+	require.NoError(t, client.ChangeLogicalVolume(ctx, Name(vg+"/lv0"), ChangeLogicalVolumeOptions{
+		Contiguous: Bool(true),
+	}))
+	// lv_attr char 3 is the allocation policy
+	assert.Equal(t, byte('c'), lvByName(t, client, vg, "lv0").Attributes[2])
+
+	require.NoError(t, client.ChangeLogicalVolume(ctx, Name(vg+"/lv0"), ChangeLogicalVolumeOptions{
+		Allocation: AllocationInherit,
+	}))
+	assert.Equal(t, byte('i'), lvByName(t, client, vg, "lv0").Attributes[2])
+}
+
 func lvByName(t *testing.T, client *Client, vg, name string) LogicalVolume {
 	t.Helper()
 

@@ -298,12 +298,68 @@ func parsePercent(value string) (float64, error) {
 	return strconv.ParseFloat(value, 64)
 }
 
+// Permission is an lv read/write permission.
+type Permission string
+
+// Permission values.
+const (
+	PermissionReadWrite Permission = "rw"
+	PermissionReadOnly  Permission = "r"
+)
+
+// Discards is how a thin pool handles discards.
+type Discards string
+
+// Discards values.
+const (
+	DiscardsIgnore     Discards = "ignore"
+	DiscardsNoPassdown Discards = "nopassdown"
+	DiscardsPassdown   Discards = "passdown"
+)
+
+// Readahead is an lv readahead setting: ReadaheadAuto, ReadaheadNone,
+// or a fixed size from ReadaheadSectors.
+type Readahead string
+
+// Readahead values.
+const (
+	ReadaheadAuto Readahead = "auto"
+	ReadaheadNone Readahead = "none"
+)
+
+// ReadaheadSectors is a fixed readahead of the given number of 512
+// byte sectors.
+func ReadaheadSectors(sectors uint64) Readahead {
+	return Readahead(strconv.FormatUint(sectors, 10))
+}
+
 // ChangeLogicalVolumeOptions configures ChangeLogicalVolume. At least
-// one property must be set.
+// one property must be set. Zero, Discards and ErrorWhenFull are thin
+// pool properties.
 type ChangeLogicalVolumeOptions struct {
 	CommonOptions
 	AddTags    []string
 	RemoveTags []string
+	// Permission sets the lv read/write permission.
+	Permission Permission
+	// Contiguous controls contiguous extent allocation.
+	Contiguous *bool
+	// Zero controls zeroing of newly provisioned pool blocks.
+	Zero *bool
+	// Discards sets how the pool handles discards.
+	Discards Discards
+	// ErrorWhenFull makes writes to a full pool error instead of queue.
+	ErrorWhenFull *bool
+	// SetActivationSkip controls the flag that makes activation skip
+	// the lv unless IgnoreActivationSkip is used.
+	SetActivationSkip *bool
+	// Readahead sets the lv readahead.
+	Readahead Readahead
+	// Allocation sets the extent allocation policy.
+	Allocation AllocationPolicy
+	// SetAutoactivation controls whether the lv autoactivates on boot
+	// and device appearance.
+	SetAutoactivation *bool
 }
 
 // ChangeLogicalVolume changes properties of the lvs the target selects.
@@ -318,6 +374,42 @@ func (c *Client) ChangeLogicalVolume(ctx context.Context, target Selector, opts 
 	}
 	for _, tag := range opts.RemoveTags {
 		cmd = cmd.Append("--deltag", tag)
+		properties++
+	}
+	if opts.Permission != "" {
+		cmd = cmd.Append("-p", string(opts.Permission))
+		properties++
+	}
+	if opts.Contiguous != nil {
+		cmd = cmd.Append("-C", flagValue(*opts.Contiguous))
+		properties++
+	}
+	if opts.Zero != nil {
+		cmd = cmd.Append("-Z", flagValue(*opts.Zero))
+		properties++
+	}
+	if opts.Discards != "" {
+		cmd = cmd.Append("--discards", string(opts.Discards))
+		properties++
+	}
+	if opts.ErrorWhenFull != nil {
+		cmd = cmd.Append("--errorwhenfull", flagValue(*opts.ErrorWhenFull))
+		properties++
+	}
+	if opts.SetActivationSkip != nil {
+		cmd = cmd.Append("-k", flagValue(*opts.SetActivationSkip))
+		properties++
+	}
+	if opts.Readahead != "" {
+		cmd = cmd.Append("-r", string(opts.Readahead))
+		properties++
+	}
+	if opts.Allocation != "" {
+		cmd = cmd.Append("--alloc", string(opts.Allocation))
+		properties++
+	}
+	if opts.SetAutoactivation != nil {
+		cmd = cmd.Append("--setautoactivation", flagValue(*opts.SetAutoactivation))
 		properties++
 	}
 
