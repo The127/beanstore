@@ -1,0 +1,17 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint server
+      run: golangci-lint run ./...
+    - name: lint client
+      root: client/
+      run: golangci-lint run ./...
+
+commit-msg:
+  jobs:
+    - name: conventional commit message
+      run: |
+        head -n1 {1} | grep -qE '^(feat|fix|chore|docs|refactor|test|perf|build|ci|revert)!?: .+' || {
+          echo "commit message must follow plain conventional commits: 'type: description' (no scopes)"
+          exit 1
+        }
