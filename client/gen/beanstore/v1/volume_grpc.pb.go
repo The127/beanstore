@@ -25,6 +25,7 @@ const (
 	VolumeService_Attach_FullMethodName        = "/beanstore.v1.VolumeService/Attach"
 	VolumeService_Detach_FullMethodName        = "/beanstore.v1.VolumeService/Detach"
 	VolumeService_DeleteVolume_FullMethodName  = "/beanstore.v1.VolumeService/DeleteVolume"
+	VolumeService_ResizeVolume_FullMethodName  = "/beanstore.v1.VolumeService/ResizeVolume"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -50,6 +51,9 @@ type VolumeServiceClient interface {
 	// DeleteVolume removes a READY or RETIRED volume. Refused in any
 	// other state.
 	DeleteVolume(ctx context.Context, in *DeleteVolumeRequest, opts ...grpc.CallOption) (*DeleteVolumeResponse, error)
+	// ResizeVolume grows a READY or ATTACHED volume to the given size.
+	// Shrinking is refused.
+	ResizeVolume(ctx context.Context, in *ResizeVolumeRequest, opts ...grpc.CallOption) (*ResizeVolumeResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -120,6 +124,16 @@ func (c *volumeServiceClient) DeleteVolume(ctx context.Context, in *DeleteVolume
 	return out, nil
 }
 
+func (c *volumeServiceClient) ResizeVolume(ctx context.Context, in *ResizeVolumeRequest, opts ...grpc.CallOption) (*ResizeVolumeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResizeVolumeResponse)
+	err := c.cc.Invoke(ctx, VolumeService_ResizeVolume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -143,6 +157,9 @@ type VolumeServiceServer interface {
 	// DeleteVolume removes a READY or RETIRED volume. Refused in any
 	// other state.
 	DeleteVolume(context.Context, *DeleteVolumeRequest) (*DeleteVolumeResponse, error)
+	// ResizeVolume grows a READY or ATTACHED volume to the given size.
+	// Shrinking is refused.
+	ResizeVolume(context.Context, *ResizeVolumeRequest) (*ResizeVolumeResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -170,6 +187,9 @@ func (UnimplementedVolumeServiceServer) Detach(context.Context, *DetachRequest) 
 }
 func (UnimplementedVolumeServiceServer) DeleteVolume(context.Context, *DeleteVolumeRequest) (*DeleteVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteVolume not implemented")
+}
+func (UnimplementedVolumeServiceServer) ResizeVolume(context.Context, *ResizeVolumeRequest) (*ResizeVolumeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResizeVolume not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -300,6 +320,24 @@ func _VolumeService_DeleteVolume_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_ResizeVolume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResizeVolumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).ResizeVolume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_ResizeVolume_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).ResizeVolume(ctx, req.(*ResizeVolumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -330,6 +368,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteVolume",
 			Handler:    _VolumeService_DeleteVolume_Handler,
+		},
+		{
+			MethodName: "ResizeVolume",
+			Handler:    _VolumeService_ResizeVolume_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -198,6 +198,22 @@ func (s *volumeServiceServer) runDelete(id, operationID string) {
 	s.ops.Done(operationID)
 }
 
+func (s *volumeServiceServer) ResizeVolume(ctx context.Context, request *beanstorev1.ResizeVolumeRequest) (*beanstorev1.ResizeVolumeResponse, error) {
+	if !volumeIDPattern.MatchString(request.VolumeId) {
+		return nil, status.Error(codes.InvalidArgument, "volume_id is not a valid lv name")
+	}
+	if request.SizeBytes == 0 {
+		return nil, status.Error(codes.InvalidArgument, "size_bytes must be set")
+	}
+
+	err := storage.ResizeVolume(ctx, s.lvm, s.cfg, request.VolumeId, request.SizeBytes)
+	if err != nil {
+		return nil, volumeError(ctx, err, "resizing failed")
+	}
+
+	return &beanstorev1.ResizeVolumeResponse{}, nil
+}
+
 // volumeError maps storage errors onto grpc codes. Internal failures
 // are logged and answered without detail.
 func volumeError(ctx context.Context, err error, message string) error {
@@ -205,6 +221,9 @@ func volumeError(ctx context.Context, err error, message string) error {
 	switch {
 	case errors.Is(err, storage.ErrNotFound):
 		return status.Error(codes.NotFound, "volume does not exist")
+
+	case errors.Is(err, storage.ErrShrink):
+		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.As(err, &wrongState):
 		return status.Error(codes.FailedPrecondition, wrongState.Error())

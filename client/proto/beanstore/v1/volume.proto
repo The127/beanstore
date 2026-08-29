@@ -28,6 +28,10 @@ service VolumeService {
   // DeleteVolume removes a READY or RETIRED volume. Refused in any
   // other state.
   rpc DeleteVolume(DeleteVolumeRequest) returns (DeleteVolumeResponse);
+
+  // ResizeVolume grows a READY or ATTACHED volume to the given size.
+  // Shrinking is refused.
+  rpc ResizeVolume(ResizeVolumeRequest) returns (ResizeVolumeResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -84,6 +88,13 @@ message DeleteVolumeRequest {
 }
 
 message DeleteVolumeResponse {}
+
+message ResizeVolumeRequest {
+  string volume_id = 1;
+  uint64 size_bytes = 2;
+}
+
+message ResizeVolumeResponse {}
 
 message GetNodeStatusRequest {}
 

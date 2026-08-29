@@ -226,6 +226,23 @@ func TestDetachOnReadyVolumeFails(t *testing.T) {
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 }
 
+func TestResizeVolumeCodes(t *testing.T) {
+	volumes, _ := testServer(t, &fakeRunner{outputs: []string{readyLV, readyLV}})
+
+	_, err := volumes.ResizeVolume(t.Context(), &beanstorev1.ResizeVolumeRequest{
+		VolumeId:  "vol-1",
+		SizeBytes: 2 << 30,
+	})
+	require.NoError(t, err)
+
+	_, err = volumes.ResizeVolume(t.Context(), &beanstorev1.ResizeVolumeRequest{
+		VolumeId:  "vol-1",
+		SizeBytes: 1 << 20,
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.ErrorContains(t, err, "cannot shrink")
+}
+
 func TestDeleteVolumeRunsToDone(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{readyLV}}
 	volumes, operationsServer := testServer(t, fake)

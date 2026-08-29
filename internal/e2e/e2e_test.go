@@ -210,6 +210,22 @@ func TestIntegrationDaemonLifecycle(t *testing.T) {
 	})
 	assert.Equal(t, codes.AlreadyExists, status.Code(err), "volume and operation id are both taken")
 
+	_, err = volumes.ResizeVolume(ctx, &beanstorev1.ResizeVolumeRequest{
+		VolumeId:  "vol-1",
+		SizeBytes: 96 << 20,
+	})
+	require.NoError(t, err)
+
+	list, err = volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(96<<20), list.Volumes[0].SizeBytes)
+
+	_, err = volumes.ResizeVolume(ctx, &beanstorev1.ResizeVolumeRequest{
+		VolumeId:  "vol-1",
+		SizeBytes: 64 << 20,
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err), "shrinking is refused")
+
 	attach, err := volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "vol-1"})
 	require.NoError(t, err)
 	assert.NotEmpty(t, attach.DevicePath)

@@ -129,6 +129,39 @@ func TestDetachRefusesWrongState(t *testing.T) {
 	assert.Len(t, fake.calls, 1)
 }
 
+func TestResizeVolumeGrows(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{readyLV, ""}}
+	client := lvm.New(lvm.WithRunner(fake))
+
+	err := ResizeVolume(t.Context(), client, testConfig(), "vol-1", 2<<30)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"lvresize", "-L", "2147483648b", "vg0/vol-1"}, fake.calls[1].Args())
+}
+
+func TestResizeVolumeRefusesShrinkAndEqual(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{readyLV, readyLV}}
+	client := lvm.New(lvm.WithRunner(fake))
+
+	err := ResizeVolume(t.Context(), client, testConfig(), "vol-1", 1<<20)
+	assert.ErrorIs(t, err, ErrShrink)
+
+	err = ResizeVolume(t.Context(), client, testConfig(), "vol-1", 1<<30)
+	assert.ErrorIs(t, err, ErrShrink, "the current size is not a growth")
+	assert.Len(t, fake.calls, 2, "no lvresize ran")
+}
+
+func TestResizeVolumeRefusesWrongState(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{mixedStates}}
+	client := lvm.New(lvm.WithRunner(fake))
+
+	err := ResizeVolume(t.Context(), client, testConfig(), "vol-creating", 2<<30)
+
+	var wrongState *WrongStateError
+	require.ErrorAs(t, err, &wrongState)
+	assert.Equal(t, StateCreating, wrongState.Found)
+}
+
 func TestMarkDeletingRetags(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{readyLV, ""}}
 	client := lvm.New(lvm.WithRunner(fake))

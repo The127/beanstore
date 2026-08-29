@@ -221,6 +221,32 @@ func Detach(ctx context.Context, client *lvm.Client, cfg config.Config, id strin
 	return nil
 }
 
+// ErrShrink reports a resize below the volume's current size.
+var ErrShrink = errors.New("volumes cannot shrink")
+
+// ResizeVolume grows a READY or ATTACHED volume to the given size.
+func ResizeVolume(ctx context.Context, client *lvm.Client, cfg config.Config, id string, sizeBytes uint64) error {
+	volume, err := GetVolume(ctx, client, cfg, id)
+	if err != nil {
+		return err
+	}
+	if volume.State != StateReady && volume.State != StateAttached {
+		return &WrongStateError{Volume: id, Found: volume.State}
+	}
+	if sizeBytes <= volume.SizeBytes {
+		return fmt.Errorf("%w: volume %s has %d bytes, requested %d",
+			ErrShrink, id, volume.SizeBytes, sizeBytes)
+	}
+
+	err = client.ResizeLogicalVolume(ctx, cfg.VolumeGroup+"/"+id, lvm.Bytes(sizeBytes),
+		lvm.ResizeLogicalVolumeOptions{})
+	if err != nil {
+		return fmt.Errorf("resizing volume %s: %w", id, err)
+	}
+
+	return nil
+}
+
 // MarkDeleting retags a READY or RETIRED volume as deleting. The tag
 // persists before the caller answers, a crash leaves a deleting volume
 // that recovery removes.
