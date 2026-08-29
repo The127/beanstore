@@ -162,6 +162,42 @@ func (s *volumeServiceServer) Detach(ctx context.Context, request *beanstorev1.D
 	return &beanstorev1.DetachResponse{}, nil
 }
 
+func (s *volumeServiceServer) DeleteVolume(ctx context.Context, request *beanstorev1.DeleteVolumeRequest) (*beanstorev1.DeleteVolumeResponse, error) {
+	if !volumeIDPattern.MatchString(request.VolumeId) {
+		return nil, status.Error(codes.InvalidArgument, "volume_id is not a valid lv name")
+	}
+	if request.OperationId == "" {
+		return nil, status.Error(codes.InvalidArgument, "operation_id must be set")
+	}
+
+	err := s.ops.Begin(request.OperationId)
+	if err != nil {
+		return nil, status.Error(codes.AlreadyExists, "operation id already used")
+	}
+
+	err = storage.MarkDeleting(ctx, s.lvm, s.cfg, request.VolumeId)
+	if err != nil {
+		s.ops.Fail(request.OperationId, err.Error())
+		return nil, volumeError(ctx, err, "deleting failed")
+	}
+
+	go s.runDelete(request.VolumeId, request.OperationId)
+
+	return &beanstorev1.DeleteVolumeResponse{}, nil
+}
+
+func (s *volumeServiceServer) runDelete(id, operationID string) {
+	err := storage.RemoveVolume(s.background, s.lvm, s.cfg, id)
+	if err != nil {
+		logging.FromContext(s.background).Error("removing volume", "volume", id, "error", err)
+		s.ops.Fail(operationID, err.Error())
+
+		return
+	}
+
+	s.ops.Done(operationID)
+}
+
 // volumeError maps storage errors onto grpc codes. Internal failures
 // are logged and answered without detail.
 func volumeError(ctx context.Context, err error, message string) error {

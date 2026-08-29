@@ -226,6 +226,42 @@ func TestDetachOnReadyVolumeFails(t *testing.T) {
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 }
 
+func TestDeleteVolumeRunsToDone(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{readyLV}}
+	volumes, operationsServer := testServer(t, fake)
+
+	_, err := volumes.DeleteVolume(t.Context(), &beanstorev1.DeleteVolumeRequest{
+		VolumeId:    "vol-1",
+		OperationId: "op-1",
+	})
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		response, err := operationsServer.GetOperation(t.Context(), &beanstorev1.GetOperationRequest{OperationId: "op-1"})
+		return err == nil && response.GetDone() != nil
+	}, time.Second, time.Millisecond)
+
+	retagged := strings.Join(fake.args(1), " ")
+	assert.Contains(t, retagged, "--addtag beanstore.state=deleting")
+	assert.Equal(t, []string{"lvremove", "-f", "vg0/vol-1"}, fake.args(2))
+}
+
+func TestDeleteVolumeRefusesAttachedAndFailsOperation(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{attachedLV}}
+	volumes, operationsServer := testServer(t, fake)
+
+	_, err := volumes.DeleteVolume(t.Context(), &beanstorev1.DeleteVolumeRequest{
+		VolumeId:    "vol-1",
+		OperationId: "op-1",
+	})
+
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+
+	response, err := operationsServer.GetOperation(t.Context(), &beanstorev1.GetOperationRequest{OperationId: "op-1"})
+	require.NoError(t, err)
+	assert.NotNil(t, response.GetFailed(), "the refused call still consumes the operation id")
+}
+
 func TestGetOperationStates(t *testing.T) {
 	fake := &fakeRunner{}
 	_, operationsServer := testServer(t, fake)

@@ -24,6 +24,10 @@ service VolumeService {
   // Detach removes an ATTACHED volume's block device. Refused in any
   // other state, and while the device is in use.
   rpc Detach(DetachRequest) returns (DetachResponse);
+
+  // DeleteVolume removes a READY or RETIRED volume. Refused in any
+  // other state.
+  rpc DeleteVolume(DeleteVolumeRequest) returns (DeleteVolumeResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -73,6 +77,13 @@ message DetachRequest {
 }
 
 message DetachResponse {}
+
+message DeleteVolumeRequest {
+  string volume_id = 1;
+  string operation_id = 2;
+}
+
+message DeleteVolumeResponse {}
 
 message GetNodeStatusRequest {}
 

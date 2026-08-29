@@ -24,6 +24,7 @@ const (
 	VolumeService_GetNodeStatus_FullMethodName = "/beanstore.v1.VolumeService/GetNodeStatus"
 	VolumeService_Attach_FullMethodName        = "/beanstore.v1.VolumeService/Attach"
 	VolumeService_Detach_FullMethodName        = "/beanstore.v1.VolumeService/Detach"
+	VolumeService_DeleteVolume_FullMethodName  = "/beanstore.v1.VolumeService/DeleteVolume"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -46,6 +47,9 @@ type VolumeServiceClient interface {
 	// Detach removes an ATTACHED volume's block device. Refused in any
 	// other state, and while the device is in use.
 	Detach(ctx context.Context, in *DetachRequest, opts ...grpc.CallOption) (*DetachResponse, error)
+	// DeleteVolume removes a READY or RETIRED volume. Refused in any
+	// other state.
+	DeleteVolume(ctx context.Context, in *DeleteVolumeRequest, opts ...grpc.CallOption) (*DeleteVolumeResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -106,6 +110,16 @@ func (c *volumeServiceClient) Detach(ctx context.Context, in *DetachRequest, opt
 	return out, nil
 }
 
+func (c *volumeServiceClient) DeleteVolume(ctx context.Context, in *DeleteVolumeRequest, opts ...grpc.CallOption) (*DeleteVolumeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteVolumeResponse)
+	err := c.cc.Invoke(ctx, VolumeService_DeleteVolume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -126,6 +140,9 @@ type VolumeServiceServer interface {
 	// Detach removes an ATTACHED volume's block device. Refused in any
 	// other state, and while the device is in use.
 	Detach(context.Context, *DetachRequest) (*DetachResponse, error)
+	// DeleteVolume removes a READY or RETIRED volume. Refused in any
+	// other state.
+	DeleteVolume(context.Context, *DeleteVolumeRequest) (*DeleteVolumeResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -150,6 +167,9 @@ func (UnimplementedVolumeServiceServer) Attach(context.Context, *AttachRequest) 
 }
 func (UnimplementedVolumeServiceServer) Detach(context.Context, *DetachRequest) (*DetachResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Detach not implemented")
+}
+func (UnimplementedVolumeServiceServer) DeleteVolume(context.Context, *DeleteVolumeRequest) (*DeleteVolumeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteVolume not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -262,6 +282,24 @@ func _VolumeService_Detach_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_DeleteVolume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteVolumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).DeleteVolume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_DeleteVolume_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).DeleteVolume(ctx, req.(*DeleteVolumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -288,6 +326,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Detach",
 			Handler:    _VolumeService_Detach_Handler,
+		},
+		{
+			MethodName: "DeleteVolume",
+			Handler:    _VolumeService_DeleteVolume_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

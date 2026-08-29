@@ -129,6 +129,40 @@ func TestDetachRefusesWrongState(t *testing.T) {
 	assert.Len(t, fake.calls, 1)
 }
 
+func TestMarkDeletingRetags(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{readyLV, ""}}
+	client := lvm.New(lvm.WithRunner(fake))
+
+	err := MarkDeleting(t.Context(), client, testConfig(), "vol-1")
+
+	require.NoError(t, err)
+	retagged := strings.Join(fake.calls[1].Args(), " ")
+	assert.Contains(t, retagged, "--addtag beanstore.state=deleting")
+	assert.Contains(t, retagged, "--deltag beanstore.state=ready")
+}
+
+func TestMarkDeletingRefusesAttached(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{attachedLV}}
+	client := lvm.New(lvm.WithRunner(fake))
+
+	err := MarkDeleting(t.Context(), client, testConfig(), "vol-1")
+
+	var wrongState *WrongStateError
+	require.ErrorAs(t, err, &wrongState)
+	assert.Equal(t, StateAttached, wrongState.Found)
+	assert.Len(t, fake.calls, 1)
+}
+
+func TestRemoveVolumeBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{""}}
+	client := lvm.New(lvm.WithRunner(fake))
+
+	err := RemoveVolume(t.Context(), client, testConfig(), "vol-1")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"lvremove", "-f", "vg0/vol-1"}, fake.calls[0].Args())
+}
+
 func TestStateTagRoundTrip(t *testing.T) {
 	state, owned := stateOf([]string{"other", StateTag(StateAttached)})
 

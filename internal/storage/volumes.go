@@ -221,6 +221,41 @@ func Detach(ctx context.Context, client *lvm.Client, cfg config.Config, id strin
 	return nil
 }
 
+// MarkDeleting retags a READY or RETIRED volume as deleting. The tag
+// persists before the caller answers, a crash leaves a deleting volume
+// that recovery removes.
+func MarkDeleting(ctx context.Context, client *lvm.Client, cfg config.Config, id string) error {
+	volume, err := GetVolume(ctx, client, cfg, id)
+	if err != nil {
+		return err
+	}
+	if volume.State != StateReady && volume.State != StateRetired {
+		return &WrongStateError{Volume: id, Found: volume.State}
+	}
+
+	err = client.ChangeLogicalVolume(ctx, lvm.Name(cfg.VolumeGroup+"/"+id), lvm.ChangeLogicalVolumeOptions{
+		AddTags:    []string{StateTag(StateDeleting)},
+		RemoveTags: []string{StateTag(volume.State)},
+	})
+	if err != nil {
+		return fmt.Errorf("marking volume %s deleting: %w", id, err)
+	}
+
+	return nil
+}
+
+// RemoveVolume removes a volume's lv.
+func RemoveVolume(ctx context.Context, client *lvm.Client, cfg config.Config, id string) error {
+	err := client.RemoveLogicalVolume(ctx, lvm.Name(cfg.VolumeGroup+"/"+id), lvm.RemoveLogicalVolumeOptions{
+		Force: true,
+	})
+	if err != nil {
+		return fmt.Errorf("removing volume %s: %w", id, err)
+	}
+
+	return nil
+}
+
 // NodeStatus is the node's capacity as read from the pool and its
 // volumes.
 type NodeStatus struct {
