@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"net"
@@ -15,11 +16,11 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"github.com/The127/beanstore/internal/api"
+	"github.com/The127/beanstore/internal/config"
 	"github.com/The127/beanstore/internal/logging"
 )
 
-// hardcoded until a config mechanism exists
-const listenAddress = "127.0.0.1:50051"
+const defaultConfigPath = "/etc/beanstore/config.yaml"
 
 func main() {
 	err := run()
@@ -29,11 +30,34 @@ func main() {
 	}
 }
 
+func loadConfig() (config.Config, error) {
+	configPath := flag.String("config", defaultConfigPath, "path to the config file")
+	flag.Parse()
+
+	// the default path may be absent on dev machines, an explicitly
+	// given path must exist
+	required := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "config" {
+			required = true
+		}
+	})
+
+	return config.Load(*configPath, required)
+}
+
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: cfg.LogLevel,
+	}))
 	ctx = logging.WithLogger(ctx, logger)
 
 	// the notifier is nil outside systemd, all methods no-op on nil
@@ -45,9 +69,9 @@ func run() error {
 		_ = notifier.Close()
 	}()
 
-	listener, err := net.Listen("tcp", listenAddress)
+	listener, err := net.Listen("tcp", cfg.ListenAddress)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", listenAddress, err)
+		return fmt.Errorf("listening on %s: %w", cfg.ListenAddress, err)
 	}
 
 	server := grpc.NewServer()
@@ -62,7 +86,7 @@ func run() error {
 		server.GracefulStop()
 	}()
 
-	logger.Info("beanstore listening", "address", listenAddress)
+	logger.Info("beanstore listening", "address", cfg.ListenAddress)
 
 	err = notifier.Notify(sdnotify.Ready)
 	if err != nil {
