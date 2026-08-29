@@ -53,12 +53,14 @@ Required tooling:
   the root and the client library in `client/`.
 - [golangci-lint](https://golangci-lint.run/) v2 — linting, configured in
   `.golangci.yml`.
+- [just](https://just.systems/) — task runner; `just` lists the available
+  recipes, `just ci` runs everything that must pass.
 - [lefthook](https://lefthook.dev/) — git hooks (lint on pre-commit,
   commit message and sign-off checks on commit-msg). After cloning,
   activate the hooks once:
 
   ```bash
-  lefthook install
+  just hooks
   ```
 
 ## License

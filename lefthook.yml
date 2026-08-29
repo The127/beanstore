@@ -2,10 +2,10 @@ pre-commit:
   parallel: true
   jobs:
     - name: lint server
-      run: golangci-lint run ./...
+      run: just lint-server
     - name: lint client
       root: client/
-      run: golangci-lint run ./...
+      run: just lint-client
 
 commit-msg:
   jobs:
