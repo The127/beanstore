@@ -40,6 +40,11 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `MakeVolumeGroupNodes` | `vgmknodes` |
 | `ImportClonedVolumeGroup` | `vgimportclone` |
 | `ImportVolumeGroupDevices` | `vgimportdevices` |
+| `CreateLogicalVolume` | `lvcreate` |
+| `CreateThinPool` | `lvcreate --type thin-pool` |
+| `CreateThinVolume` | `lvcreate --type thin` |
+| `ListLogicalVolumes` | `lvs` |
+| `RemoveLogicalVolume` | `lvremove` |
 
 Every operation takes an options struct. Its fields cover the command's
 flags, and the embedded `CommonOptions` override the client environment

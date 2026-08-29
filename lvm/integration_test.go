@@ -580,3 +580,68 @@ func TestIntegrationMergeAndSplit(t *testing.T) {
 
 	require.NoError(t, client.MakeVolumeGroupNodes(ctx, name, MakeVolumeGroupNodesOptions{}))
 }
+
+func TestIntegrationThinVolumeLifecycle(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	vg := vgFor(t, loop)
+
+	require.NoError(t, client.CreateThinPool(ctx, vg, "pool0", 512<<20, CreateThinPoolOptions{}))
+	require.NoError(t, client.CreateThinVolume(ctx, vg, "pool0", "vol1", 64<<20, CreateThinVolumeOptions{
+		AddTags:  []string{"state.creating"},
+		Activate: Bool(false),
+	}))
+
+	lvs, err := client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{
+		VG:     vg,
+		Select: "lv_tags = {state.creating}",
+	})
+	require.NoError(t, err)
+	require.Len(t, lvs, 1)
+	assert.Equal(t, "vol1", lvs[0].Name)
+	assert.Equal(t, uint64(64<<20), lvs[0].SizeBytes)
+	assert.Equal(t, "pool0", lvs[0].Pool)
+	assert.False(t, lvs[0].Active, "created inactive")
+	assert.Contains(t, lvs[0].Layout, "thin")
+
+	require.NoError(t, client.ActivateVolumeGroup(ctx, Name(vg), ActivateVolumeGroupOptions{}))
+
+	lvs, err = client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{VG: vg, Select: "lv_name = vol1"})
+	require.NoError(t, err)
+	require.Len(t, lvs, 1)
+	assert.True(t, lvs[0].Active)
+	assert.NotEmpty(t, lvs[0].Path)
+
+	pools, err := client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{VG: vg, Select: "lv_name = pool0"})
+	require.NoError(t, err)
+	require.Len(t, pools, 1)
+	assert.Contains(t, pools[0].Layout, "pool")
+
+	require.NoError(t, client.RemoveLogicalVolume(ctx, Name(vg+"/vol1"), RemoveLogicalVolumeOptions{Force: true}))
+
+	lvs, err = client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{VG: vg, Select: "lv_name = vol1"})
+	require.NoError(t, err)
+	assert.Empty(t, lvs)
+}
+
+func TestIntegrationLinearVolumeLifecycle(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	vg := vgFor(t, loop)
+
+	require.NoError(t, client.CreateLogicalVolume(ctx, vg, "lv0", 32<<20, CreateLogicalVolumeOptions{}))
+
+	lvs, err := client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{VG: vg})
+	require.NoError(t, err)
+	require.Len(t, lvs, 1)
+	assert.Equal(t, uint64(32<<20), lvs[0].SizeBytes)
+	assert.Contains(t, lvs[0].Layout, "linear")
+
+	require.NoError(t, client.RemoveLogicalVolume(ctx, Name(vg+"/lv0"), RemoveLogicalVolumeOptions{Force: true}))
+}
