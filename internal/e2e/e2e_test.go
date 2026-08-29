@@ -79,7 +79,7 @@ func loopDevice(t *testing.T) lvm.Device {
 
 // daemon brings up the full stack on a real vg: storage setup with
 // pool bootstrap, api, grpc over localhost.
-func daemon(t *testing.T) (beanstorev1.VolumeServiceClient, beanstorev1.OperationServiceClient) {
+func daemon(t *testing.T) (beanstorev1.VolumeServiceClient, beanstorev1.OperationServiceClient, string, *lvm.Client) {
 	t.Helper()
 
 	loop := loopDevice(t)
@@ -118,7 +118,7 @@ func daemon(t *testing.T) (beanstorev1.VolumeServiceClient, beanstorev1.Operatio
 		_ = conn.Close()
 	})
 
-	return beanstorev1.NewVolumeServiceClient(conn), beanstorev1.NewOperationServiceClient(conn)
+	return beanstorev1.NewVolumeServiceClient(conn), beanstorev1.NewOperationServiceClient(conn), vg, client
 }
 
 func waitDone(t *testing.T, operations beanstorev1.OperationServiceClient, id string) {
@@ -179,7 +179,7 @@ func TestIntegrationRecovery(t *testing.T) {
 }
 
 func TestIntegrationExport(t *testing.T) {
-	volumes, operations := daemon(t)
+	volumes, operations, vg, lvmClient := daemon(t)
 	ctx := t.Context()
 
 	_, err := volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
@@ -207,6 +207,13 @@ func TestIntegrationExport(t *testing.T) {
 		SnapshotId: "snap-1",
 	})
 	require.NoError(t, err)
+
+	// the in-process daemon is unprivileged, unlike a root daemon, so
+	// the snapshot's device node needs explicit read access
+	require.NoError(t, lvmClient.ActivateLogicalVolume(ctx, lvm.Name(vg+"/snap-1"), lvm.ActivateLogicalVolumeOptions{
+		IgnoreActivationSkip: true,
+	}))
+	require.NoError(t, sudoRun(ctx, "chmod", "o+r", "/dev/"+vg+"/snap-1"))
 
 	stream, err := volumes.Export(ctx, &beanstorev1.ExportRequest{SnapshotId: "snap-1"})
 	require.NoError(t, err)
@@ -242,7 +249,7 @@ func TestIntegrationExport(t *testing.T) {
 }
 
 func TestIntegrationDaemonLifecycle(t *testing.T) {
-	volumes, operations := daemon(t)
+	volumes, operations, _, _ := daemon(t)
 	ctx := t.Context()
 
 	_, err := volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
