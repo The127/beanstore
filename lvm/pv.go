@@ -113,3 +113,58 @@ func parsePVReport(output []byte) ([]PhysicalVolume, error) {
 
 	return volumes, nil
 }
+
+// AddPhysicalVolumeTag tags the given pv, which must be in a vg.
+func (c *Client) AddPhysicalVolumeTag(ctx context.Context, device, tag string) error {
+	cmd := c.command("pvchange").Append("--addtag", tag, device)
+
+	_, err := c.runner.Run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("tagging physical volume %s with %s: %w", device, tag, err)
+	}
+
+	return nil
+}
+
+// RemovePhysicalVolumeTag removes a tag from the given pv.
+func (c *Client) RemovePhysicalVolumeTag(ctx context.Context, device, tag string) error {
+	cmd := c.command("pvchange").Append("--deltag", tag, device)
+
+	_, err := c.runner.Run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("untagging physical volume %s from %s: %w", device, tag, err)
+	}
+
+	return nil
+}
+
+// SetPhysicalVolumeAllocatable controls whether lvm may allocate new
+// extents on the given pv.
+func (c *Client) SetPhysicalVolumeAllocatable(ctx context.Context, device string, allocatable bool) error {
+	value := "n"
+	if allocatable {
+		value = "y"
+	}
+
+	cmd := c.command("pvchange").Append("-x", value, device)
+
+	_, err := c.runner.Run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("setting physical volume %s allocatable=%s: %w", device, value, err)
+	}
+
+	return nil
+}
+
+// ResizePhysicalVolume grows the given pv to the current size of its
+// underlying device.
+func (c *Client) ResizePhysicalVolume(ctx context.Context, device string) error {
+	cmd := c.command("pvresize").Append(device)
+
+	_, err := c.runner.Run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("resizing physical volume %s: %w", device, err)
+	}
+
+	return nil
+}

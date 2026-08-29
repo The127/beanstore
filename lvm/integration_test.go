@@ -96,3 +96,94 @@ func TestIntegrationCreateOnMissingDeviceFails(t *testing.T) {
 
 	assert.Error(t, err)
 }
+
+// vgFor wraps the loop device in a vg through raw commands until the vg
+// family is wrapped.
+func vgFor(t *testing.T, loop string) string {
+	t.Helper()
+
+	vg := fmt.Sprintf("beanstore-test-%d", os.Getpid())
+	_, err := sudoRun(t.Context(), "lvm", "vgcreate", "--devices", loop, vg, loop)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		//nolint:usetesting // t.Context is done during cleanup
+		_, _ = sudoRun(context.Background(), "lvm", "vgremove", "--devices", loop, "-f", vg)
+	})
+
+	return vg
+}
+
+func TestIntegrationPhysicalVolumeTags(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	vgFor(t, loop)
+
+	require.NoError(t, client.AddPhysicalVolumeTag(ctx, loop, "fast"))
+	require.NoError(t, client.AddPhysicalVolumeTag(ctx, loop, "ssd"))
+
+	pvs, err := client.ListPhysicalVolumes(ctx)
+	require.NoError(t, err)
+	require.Len(t, pvs, 1)
+	assert.ElementsMatch(t, []string{"fast", "ssd"}, pvs[0].Tags)
+
+	require.NoError(t, client.RemovePhysicalVolumeTag(ctx, loop, "fast"))
+
+	pvs, err = client.ListPhysicalVolumes(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ssd"}, pvs[0].Tags)
+}
+
+func TestIntegrationPhysicalVolumeAllocatable(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	vgFor(t, loop)
+
+	require.NoError(t, client.SetPhysicalVolumeAllocatable(ctx, loop, false))
+
+	pvs, err := client.ListPhysicalVolumes(ctx)
+	require.NoError(t, err)
+	assert.NotEqual(t, "a", pvs[0].Attributes[:1])
+
+	require.NoError(t, client.SetPhysicalVolumeAllocatable(ctx, loop, true))
+
+	pvs, err = client.ListPhysicalVolumes(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "a", pvs[0].Attributes[:1])
+}
+
+func TestIntegrationPhysicalVolumeResize(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+
+	pvs, err := client.ListPhysicalVolumes(ctx)
+	require.NoError(t, err)
+	sizeBefore := pvs[0].SizeBytes
+
+	backing := backingFileOf(t, loop)
+	require.NoError(t, os.Truncate(backing, 2<<30))
+	_, err = sudoRun(ctx, "losetup", "-c", loop)
+	require.NoError(t, err)
+
+	require.NoError(t, client.ResizePhysicalVolume(ctx, loop))
+
+	pvs, err = client.ListPhysicalVolumes(ctx)
+	require.NoError(t, err)
+	assert.Greater(t, pvs[0].SizeBytes, sizeBefore)
+}
+
+func backingFileOf(t *testing.T, loop string) string {
+	t.Helper()
+
+	output, err := sudoRun(t.Context(), "losetup", "--noheadings", "--output", "BACK-FILE", loop)
+	require.NoError(t, err)
+	return strings.TrimSpace(string(output))
+}

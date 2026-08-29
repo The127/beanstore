@@ -110,3 +110,44 @@ func TestRunnerErrorsPropagate(t *testing.T) {
 
 	assert.ErrorIs(t, err, assert.AnError)
 }
+
+func TestAddPhysicalVolumeTagBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.AddPhysicalVolumeTag(t.Context(), "/dev/loop0", "fast")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvchange", "--addtag", "fast", "/dev/loop0"}, fake.calls[0].Args())
+}
+
+func TestRemovePhysicalVolumeTagBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.RemovePhysicalVolumeTag(t.Context(), "/dev/loop0", "fast")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvchange", "--deltag", "fast", "/dev/loop0"}, fake.calls[0].Args())
+}
+
+func TestSetPhysicalVolumeAllocatableBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.SetPhysicalVolumeAllocatable(t.Context(), "/dev/loop0", false))
+	require.NoError(t, client.SetPhysicalVolumeAllocatable(t.Context(), "/dev/loop0", true))
+
+	assert.Equal(t, []string{"pvchange", "-x", "n", "/dev/loop0"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"pvchange", "-x", "y", "/dev/loop0"}, fake.calls[1].Args())
+}
+
+func TestResizePhysicalVolumeBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ResizePhysicalVolume(t.Context(), "/dev/loop0")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvresize", "/dev/loop0"}, fake.calls[0].Args())
+}

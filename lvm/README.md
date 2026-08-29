@@ -7,11 +7,15 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 
 ## Supported operations
 
-| Go                     | lvm        |
-| ---------------------- | ---------- |
-| `CreatePhysicalVolume` | `pvcreate` |
-| `ListPhysicalVolumes`  | `pvs`      |
-| `RemovePhysicalVolume` | `pvremove` |
+| Go                              | lvm                 |
+| ------------------------------- | ------------------- |
+| `CreatePhysicalVolume`          | `pvcreate`          |
+| `ListPhysicalVolumes`           | `pvs`               |
+| `RemovePhysicalVolume`          | `pvremove`          |
+| `AddPhysicalVolumeTag`          | `pvchange --addtag` |
+| `RemovePhysicalVolumeTag`       | `pvchange --deltag` |
+| `SetPhysicalVolumeAllocatable`  | `pvchange -x`       |
+| `ResizePhysicalVolume`          | `pvresize`          |
 
 ## Usage
 
