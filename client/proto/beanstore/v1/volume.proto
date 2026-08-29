@@ -10,12 +10,43 @@ service VolumeService {
   // CreateVolume starts creation of a thin LV. All ids are minted by the
   // orchestrator, including the operation id used to poll progress.
   rpc CreateVolume(CreateVolumeRequest) returns (CreateVolumeResponse);
+
+  // ListVolumes reports the node's volumes and their states.
+  rpc ListVolumes(ListVolumesRequest) returns (ListVolumesResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
 // handles are volatile: a node restart forgets them, callers rescan.
 service OperationService {
   rpc GetOperation(GetOperationRequest) returns (GetOperationResponse);
+}
+
+// VolumeState is a volume's lifecycle state. UNSPECIFIED reports a
+// volume whose persisted state is missing or unreadable.
+enum VolumeState {
+  VOLUME_STATE_UNSPECIFIED = 0;
+  VOLUME_STATE_CREATING = 1;
+  VOLUME_STATE_READY = 2;
+  VOLUME_STATE_ATTACHED = 3;
+  VOLUME_STATE_PUSHING = 4;
+  VOLUME_STATE_INCOMING = 5;
+  VOLUME_STATE_RETIRED = 6;
+  VOLUME_STATE_DELETING = 7;
+}
+
+message Volume {
+  string volume_id = 1;
+  VolumeState state = 2;
+  // size_bytes is the virtual size the consumer sees.
+  uint64 size_bytes = 3;
+  // used_bytes is the real pool space the volume occupies.
+  uint64 used_bytes = 4;
+}
+
+message ListVolumesRequest {}
+
+message ListVolumesResponse {
+  repeated Volume volumes = 1;
 }
 
 message CreateVolumeRequest {

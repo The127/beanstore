@@ -83,7 +83,7 @@ func run() error {
 	}
 
 	server := grpc.NewServer()
-	api.Register(server)
+	api.Register(server, lvmClient, cfg)
 	reflection.Register(server)
 
 	go func() {

@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	VolumeService_CreateVolume_FullMethodName = "/beanstore.v1.VolumeService/CreateVolume"
+	VolumeService_ListVolumes_FullMethodName  = "/beanstore.v1.VolumeService/ListVolumes"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -32,6 +33,8 @@ type VolumeServiceClient interface {
 	// CreateVolume starts creation of a thin LV. All ids are minted by the
 	// orchestrator, including the operation id used to poll progress.
 	CreateVolume(ctx context.Context, in *CreateVolumeRequest, opts ...grpc.CallOption) (*CreateVolumeResponse, error)
+	// ListVolumes reports the node's volumes and their states.
+	ListVolumes(ctx context.Context, in *ListVolumesRequest, opts ...grpc.CallOption) (*ListVolumesResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -52,6 +55,16 @@ func (c *volumeServiceClient) CreateVolume(ctx context.Context, in *CreateVolume
 	return out, nil
 }
 
+func (c *volumeServiceClient) ListVolumes(ctx context.Context, in *ListVolumesRequest, opts ...grpc.CallOption) (*ListVolumesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVolumesResponse)
+	err := c.cc.Invoke(ctx, VolumeService_ListVolumes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -62,6 +75,8 @@ type VolumeServiceServer interface {
 	// CreateVolume starts creation of a thin LV. All ids are minted by the
 	// orchestrator, including the operation id used to poll progress.
 	CreateVolume(context.Context, *CreateVolumeRequest) (*CreateVolumeResponse, error)
+	// ListVolumes reports the node's volumes and their states.
+	ListVolumes(context.Context, *ListVolumesRequest) (*ListVolumesResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -74,6 +89,9 @@ type UnimplementedVolumeServiceServer struct{}
 
 func (UnimplementedVolumeServiceServer) CreateVolume(context.Context, *CreateVolumeRequest) (*CreateVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateVolume not implemented")
+}
+func (UnimplementedVolumeServiceServer) ListVolumes(context.Context, *ListVolumesRequest) (*ListVolumesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListVolumes not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -114,6 +132,24 @@ func _VolumeService_CreateVolume_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_ListVolumes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListVolumesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).ListVolumes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_ListVolumes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).ListVolumes(ctx, req.(*ListVolumesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -124,6 +160,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateVolume",
 			Handler:    _VolumeService_CreateVolume_Handler,
+		},
+		{
+			MethodName: "ListVolumes",
+			Handler:    _VolumeService_ListVolumes_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
