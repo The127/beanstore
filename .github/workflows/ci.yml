@@ -30,6 +30,13 @@ jobs:
           version: v2.11.4
           working-directory: client
 
+      - name: govulncheck server
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: govulncheck client
+        working-directory: client
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
       - name: build and test server
         run: |
           go build ./...

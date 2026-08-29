@@ -28,9 +28,14 @@ fmt:
     golangci-lint fmt ./...
     cd client && golangci-lint fmt ./...
 
+# check for known vulnerabilities in reachable code
+vuln:
+    go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+    cd client && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
 # install the git hooks
 hooks:
     lefthook install
 
 # everything that must pass before a push
-ci: lint build test
+ci: lint build test vuln
