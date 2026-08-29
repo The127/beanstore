@@ -187,3 +187,58 @@ func backingFileOf(t *testing.T, loop string) string {
 	require.NoError(t, err)
 	return strings.TrimSpace(string(output))
 }
+
+func TestIntegrationRegenerateUUIDChangesUUID(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	vgFor(t, loop)
+
+	pvs, err := client.ListPhysicalVolumes(ctx)
+	require.NoError(t, err)
+	before := pvs[0].UUID
+	require.NotEmpty(t, before)
+
+	require.NoError(t, client.RegeneratePhysicalVolumeUUID(ctx, loop))
+
+	pvs, err = client.ListPhysicalVolumes(ctx)
+	require.NoError(t, err)
+	assert.NotEqual(t, before, pvs[0].UUID)
+}
+
+func TestIntegrationMetadataIgnoreRoundTrip(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	vgFor(t, loop)
+
+	require.NoError(t, client.SetPhysicalVolumeMetadataIgnore(ctx, loop, true))
+
+	output, err := sudoRun(ctx, "lvm", "pvs", "--devices", loop, "--noheadings", "-o", "pv_mda_used_count", loop)
+	require.NoError(t, err)
+	assert.Equal(t, "0", strings.TrimSpace(string(output)))
+
+	require.NoError(t, client.SetPhysicalVolumeMetadataIgnore(ctx, loop, false))
+
+	output, err = sudoRun(ctx, "lvm", "pvs", "--devices", loop, "--noheadings", "-o", "pv_mda_used_count", loop)
+	require.NoError(t, err)
+	assert.Equal(t, "1", strings.TrimSpace(string(output)))
+}
+
+func TestIntegrationResizeToShrinksOrphanPV(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+
+	require.NoError(t, client.ResizePhysicalVolumeTo(ctx, loop, 512<<20))
+
+	pvs, err := client.ListPhysicalVolumes(ctx)
+	require.NoError(t, err)
+	assert.LessOrEqual(t, pvs[0].SizeBytes, uint64(512<<20))
+}

@@ -15,7 +15,10 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `AddPhysicalVolumeTag`          | `pvchange --addtag` |
 | `RemovePhysicalVolumeTag`       | `pvchange --deltag` |
 | `SetPhysicalVolumeAllocatable`  | `pvchange -x`       |
+| `RegeneratePhysicalVolumeUUID`  | `pvchange -u`       |
+| `SetPhysicalVolumeMetadataIgnore` | `pvchange --metadataignore` |
 | `ResizePhysicalVolume`          | `pvresize`          |
+| `ResizePhysicalVolumeTo`        | `pvresize --setphysicalvolumesize` |
 
 ## Usage
 

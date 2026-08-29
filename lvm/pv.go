@@ -11,6 +11,7 @@ import (
 // PhysicalVolume is one pv as reported by pvs.
 type PhysicalVolume struct {
 	Device      string
+	UUID        string
 	VolumeGroup string
 	SizeBytes   uint64
 	FreeBytes   uint64
@@ -38,7 +39,7 @@ func (c *Client) ListPhysicalVolumes(ctx context.Context) ([]PhysicalVolume, err
 		"--reportformat", "json",
 		"--units", "b",
 		"--nosuffix",
-		"-o", "pv_name,vg_name,pv_size,pv_free,pv_attr,pv_tags",
+		"-o", "pv_name,pv_uuid,vg_name,pv_size,pv_free,pv_attr,pv_tags",
 	)
 
 	output, err := c.runner.Run(ctx, cmd)
@@ -65,6 +66,7 @@ type pvReport struct {
 	Report []struct {
 		PV []struct {
 			Name string `json:"pv_name"`
+			UUID string `json:"pv_uuid"`
 			VG   string `json:"vg_name"`
 			Size string `json:"pv_size"`
 			Free string `json:"pv_free"`
@@ -102,6 +104,7 @@ func parsePVReport(output []byte) ([]PhysicalVolume, error) {
 
 			volumes = append(volumes, PhysicalVolume{
 				Device:      pv.Name,
+				UUID:        pv.UUID,
 				VolumeGroup: pv.VG,
 				SizeBytes:   size,
 				FreeBytes:   free,
@@ -164,6 +167,58 @@ func (c *Client) ResizePhysicalVolume(ctx context.Context, device string) error 
 	_, err := c.runner.Run(ctx, cmd)
 	if err != nil {
 		return fmt.Errorf("resizing physical volume %s: %w", device, err)
+	}
+
+	return nil
+}
+
+// RegeneratePhysicalVolumeUUID gives the given pv a new random UUID.
+// Meant for pvs that lost UUID uniqueness through device cloning. On
+// hosts tracking pvs by UUID in the devices file, lvm updates the entry
+// as part of the command.
+func (c *Client) RegeneratePhysicalVolumeUUID(ctx context.Context, device string) error {
+	cmd := c.command("pvchange").Append("-u", device)
+
+	_, err := c.runner.Run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("regenerating uuid of physical volume %s: %w", device, err)
+	}
+
+	return nil
+}
+
+// SetPhysicalVolumeMetadataIgnore controls whether the metadata areas
+// on the given pv are used to store vg metadata.
+func (c *Client) SetPhysicalVolumeMetadataIgnore(ctx context.Context, device string, ignore bool) error {
+	value := "n"
+	if ignore {
+		value = "y"
+	}
+
+	cmd := c.command("pvchange").Append("--metadataignore", value, device)
+
+	_, err := c.runner.Run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("setting physical volume %s metadataignore=%s: %w", device, value, err)
+	}
+
+	return nil
+}
+
+// ResizePhysicalVolumeTo overrides the pv size instead of detecting it,
+// meant to shrink a pv before shrinking the underlying device. The
+// confirmation lvm asks for is answered, the explicit size already
+// expresses the intent.
+func (c *Client) ResizePhysicalVolumeTo(ctx context.Context, device string, sizeBytes uint64) error {
+	cmd := c.command("pvresize").Append(
+		"--setphysicalvolumesize", strconv.FormatUint(sizeBytes, 10)+"b",
+		"-y",
+		device,
+	)
+
+	_, err := c.runner.Run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("resizing physical volume %s to %d bytes: %w", device, sizeBytes, err)
 	}
 
 	return nil

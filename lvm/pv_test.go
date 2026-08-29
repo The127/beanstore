@@ -49,8 +49,9 @@ func TestWithDevicesScopesEveryCommand(t *testing.T) {
 func TestListPhysicalVolumesBuildsCommandAndParses(t *testing.T) {
 	fake := &fakeRunner{output: []byte(`{
 		"report": [{"pv": [
-			{"pv_name": "/dev/loop0", "vg_name": "", "pv_size": "1073741824",
-			 "pv_free": "1073741824", "pv_attr": "---", "pv_tags": ""},
+			{"pv_name": "/dev/loop0", "pv_uuid": "aaaa11-2222", "vg_name": "",
+			 "pv_size": "1073741824", "pv_free": "1073741824", "pv_attr": "---",
+			 "pv_tags": ""},
 			{"pv_name": "/dev/sda2", "vg_name": "vg0", "pv_size": "512110190592",
 			 "pv_free": "10737418240", "pv_attr": "a--", "pv_tags": "fast,ssd"}
 		]}], "log": []}`)}
@@ -64,12 +65,13 @@ func TestListPhysicalVolumesBuildsCommandAndParses(t *testing.T) {
 		"--reportformat", "json",
 		"--units", "b",
 		"--nosuffix",
-		"-o", "pv_name,vg_name,pv_size,pv_free,pv_attr,pv_tags",
+		"-o", "pv_name,pv_uuid,vg_name,pv_size,pv_free,pv_attr,pv_tags",
 	}, fake.calls[0].Args())
 
 	require.Len(t, pvs, 2)
 	assert.Equal(t, PhysicalVolume{
 		Device:      "/dev/loop0",
+		UUID:        "aaaa11-2222",
 		VolumeGroup: "",
 		SizeBytes:   1073741824,
 		FreeBytes:   1073741824,
@@ -150,4 +152,40 @@ func TestResizePhysicalVolumeBuildsCommand(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"pvresize", "/dev/loop0"}, fake.calls[0].Args())
+}
+
+func TestRegeneratePhysicalVolumeUUIDBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.RegeneratePhysicalVolumeUUID(t.Context(), "/dev/loop0")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvchange", "-u", "/dev/loop0"}, fake.calls[0].Args())
+}
+
+func TestSetPhysicalVolumeMetadataIgnoreBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.SetPhysicalVolumeMetadataIgnore(t.Context(), "/dev/loop0", true))
+	require.NoError(t, client.SetPhysicalVolumeMetadataIgnore(t.Context(), "/dev/loop0", false))
+
+	assert.Equal(t, []string{"pvchange", "--metadataignore", "y", "/dev/loop0"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"pvchange", "--metadataignore", "n", "/dev/loop0"}, fake.calls[1].Args())
+}
+
+func TestResizePhysicalVolumeToBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ResizePhysicalVolumeTo(t.Context(), "/dev/loop0", 536870912)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"pvresize",
+		"--setphysicalvolumesize", "536870912b",
+		"-y",
+		"/dev/loop0",
+	}, fake.calls[0].Args())
 }
