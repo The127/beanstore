@@ -67,10 +67,11 @@ prose:
         exit 1
     fi
 
-# run the lvm integration tests against a loop device vg (needs sudo)
+# run the lvm and daemon integration tests against loop device vgs (needs sudo)
 test-integration:
     sudo -v
     cd lvm && go test -tags integration -run TestIntegration -count=1 -v ./...
+    go test -tags integration -run TestIntegration -count=1 -v ./internal/e2e/
 
 # check for known vulnerabilities in reachable code
 vuln:
