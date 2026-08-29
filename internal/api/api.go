@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"regexp"
+	"runtime/debug"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -132,6 +133,53 @@ func (s *volumeServiceServer) ListVolumes(ctx context.Context, _ *beanstorev1.Li
 	}
 
 	return response, nil
+}
+
+func (s *volumeServiceServer) GetNodeStatus(ctx context.Context, _ *beanstorev1.GetNodeStatusRequest) (*beanstorev1.GetNodeStatusResponse, error) {
+	nodeStatus, err := storage.GetNodeStatus(ctx, s.lvm, s.cfg)
+	if err != nil {
+		logging.FromContext(ctx).Error("reading node status", "error", err)
+		return nil, status.Error(codes.Internal, "reading node status failed")
+	}
+
+	version, err := s.lvm.GetVersion(ctx, lvm.VersionOptions{})
+	if err != nil {
+		logging.FromContext(ctx).Error("reading lvm version", "error", err)
+		return nil, status.Error(codes.Internal, "reading lvm version failed")
+	}
+
+	response := &beanstorev1.GetNodeStatusResponse{
+		PoolSizeBytes:         nodeStatus.PoolSizeBytes,
+		PoolUsedBytes:         nodeStatus.PoolUsedBytes,
+		PoolMetadataSizeBytes: nodeStatus.PoolMetadataSizeBytes,
+		PoolMetadataUsedBytes: nodeStatus.PoolMetadataUsedBytes,
+		CommittedBytes:        nodeStatus.CommittedBytes,
+		VolumeCounts:          map[string]uint32{},
+		BeanstoreVersion:      beanstoreVersion(),
+		LvmVersion:            version.LVM,
+	}
+	for state, count := range nodeStatus.VolumeCounts {
+		response.VolumeCounts[stateName(state)] = count
+	}
+
+	return response, nil
+}
+
+func stateName(state storage.State) string {
+	if state == storage.StateUnknown {
+		return "unknown"
+	}
+
+	return string(state)
+}
+
+func beanstoreVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok || info.Main.Version == "" {
+		return "unknown"
+	}
+
+	return info.Main.Version
 }
 
 func protoState(state storage.State) beanstorev1.VolumeState {

@@ -237,7 +237,8 @@ func TestListLogicalVolumesBuildsCommandAndParses(t *testing.T) {
 	fake := &fakeRunner{output: []byte(`{
 		"report": [{"lv": [
 			{"lv_name": "pool0", "lv_uuid": "uuid-p", "vg_name": "vg0",
-			 "lv_size": "536870912", "lv_attr": "twi-aotz--", "lv_tags": "",
+			 "lv_size": "536870912", "lv_metadata_size": "4194304",
+			 "lv_attr": "twi-aotz--", "lv_tags": "",
 			 "pool_lv": "", "origin": "", "lv_path": "", "lv_dm_path": "/dev/mapper/vg0-pool0",
 			 "data_percent": "7.42", "metadata_percent": "10.94",
 			 "lv_active": "active", "lv_layout": "pool,thin"},
@@ -262,7 +263,7 @@ func TestListLogicalVolumesBuildsCommandAndParses(t *testing.T) {
 		"--units", "b",
 		"--nosuffix",
 		"--binary",
-		"-o", "lv_name,lv_uuid,vg_name,lv_size,lv_attr,lv_tags,pool_lv,origin," +
+		"-o", "lv_name,lv_uuid,vg_name,lv_size,lv_metadata_size,lv_attr,lv_tags,pool_lv,origin," +
 			"lv_path,lv_dm_path,data_percent,metadata_percent,lv_active,lv_layout",
 		"-S", "lv_tags = {beanstore}",
 		"vg0",
@@ -270,16 +271,17 @@ func TestListLogicalVolumesBuildsCommandAndParses(t *testing.T) {
 
 	require.Len(t, lvs, 2)
 	assert.Equal(t, LogicalVolume{
-		Name:            "pool0",
-		UUID:            "uuid-p",
-		VolumeGroup:     "vg0",
-		SizeBytes:       536870912,
-		Attributes:      "twi-aotz--",
-		DevicePath:      "/dev/mapper/vg0-pool0",
-		DataPercent:     7.42,
-		MetadataPercent: 10.94,
-		Active:          true,
-		Layout:          []string{"pool", "thin"},
+		Name:              "pool0",
+		UUID:              "uuid-p",
+		VolumeGroup:       "vg0",
+		SizeBytes:         536870912,
+		MetadataSizeBytes: 4194304,
+		Attributes:        "twi-aotz--",
+		DevicePath:        "/dev/mapper/vg0-pool0",
+		DataPercent:       7.42,
+		MetadataPercent:   10.94,
+		Active:            true,
+		Layout:            []string{"pool", "thin"},
 	}, lvs[0])
 	assert.Equal(t, LogicalVolume{
 		Name:        "vol1",

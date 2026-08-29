@@ -237,6 +237,145 @@ func (x *ListVolumesResponse) GetVolumes() []*Volume {
 	return nil
 }
 
+type GetNodeStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNodeStatusRequest) Reset() {
+	*x = GetNodeStatusRequest{}
+	mi := &file_beanstore_v1_volume_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeStatusRequest) ProtoMessage() {}
+
+func (x *GetNodeStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_volume_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetNodeStatusRequest) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{3}
+}
+
+type GetNodeStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PoolSizeBytes uint64                 `protobuf:"varint,1,opt,name=pool_size_bytes,json=poolSizeBytes,proto3" json:"pool_size_bytes,omitempty"`
+	PoolUsedBytes uint64                 `protobuf:"varint,2,opt,name=pool_used_bytes,json=poolUsedBytes,proto3" json:"pool_used_bytes,omitempty"`
+	// A full metadata lv makes the pool unusable, watch these two.
+	PoolMetadataSizeBytes uint64 `protobuf:"varint,3,opt,name=pool_metadata_size_bytes,json=poolMetadataSizeBytes,proto3" json:"pool_metadata_size_bytes,omitempty"`
+	PoolMetadataUsedBytes uint64 `protobuf:"varint,4,opt,name=pool_metadata_used_bytes,json=poolMetadataUsedBytes,proto3" json:"pool_metadata_used_bytes,omitempty"`
+	// committed_bytes is the sum of all volume virtual sizes.
+	CommittedBytes uint64 `protobuf:"varint,5,opt,name=committed_bytes,json=committedBytes,proto3" json:"committed_bytes,omitempty"`
+	// volume_counts is the number of volumes per state name.
+	VolumeCounts     map[string]uint32 `protobuf:"bytes,6,rep,name=volume_counts,json=volumeCounts,proto3" json:"volume_counts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	BeanstoreVersion string            `protobuf:"bytes,7,opt,name=beanstore_version,json=beanstoreVersion,proto3" json:"beanstore_version,omitempty"`
+	LvmVersion       string            `protobuf:"bytes,8,opt,name=lvm_version,json=lvmVersion,proto3" json:"lvm_version,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GetNodeStatusResponse) Reset() {
+	*x = GetNodeStatusResponse{}
+	mi := &file_beanstore_v1_volume_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeStatusResponse) ProtoMessage() {}
+
+func (x *GetNodeStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_volume_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetNodeStatusResponse) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetNodeStatusResponse) GetPoolSizeBytes() uint64 {
+	if x != nil {
+		return x.PoolSizeBytes
+	}
+	return 0
+}
+
+func (x *GetNodeStatusResponse) GetPoolUsedBytes() uint64 {
+	if x != nil {
+		return x.PoolUsedBytes
+	}
+	return 0
+}
+
+func (x *GetNodeStatusResponse) GetPoolMetadataSizeBytes() uint64 {
+	if x != nil {
+		return x.PoolMetadataSizeBytes
+	}
+	return 0
+}
+
+func (x *GetNodeStatusResponse) GetPoolMetadataUsedBytes() uint64 {
+	if x != nil {
+		return x.PoolMetadataUsedBytes
+	}
+	return 0
+}
+
+func (x *GetNodeStatusResponse) GetCommittedBytes() uint64 {
+	if x != nil {
+		return x.CommittedBytes
+	}
+	return 0
+}
+
+func (x *GetNodeStatusResponse) GetVolumeCounts() map[string]uint32 {
+	if x != nil {
+		return x.VolumeCounts
+	}
+	return nil
+}
+
+func (x *GetNodeStatusResponse) GetBeanstoreVersion() string {
+	if x != nil {
+		return x.BeanstoreVersion
+	}
+	return ""
+}
+
+func (x *GetNodeStatusResponse) GetLvmVersion() string {
+	if x != nil {
+		return x.LvmVersion
+	}
+	return ""
+}
+
 type CreateVolumeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	VolumeId      string                 `protobuf:"bytes,1,opt,name=volume_id,json=volumeId,proto3" json:"volume_id,omitempty"`
@@ -248,7 +387,7 @@ type CreateVolumeRequest struct {
 
 func (x *CreateVolumeRequest) Reset() {
 	*x = CreateVolumeRequest{}
-	mi := &file_beanstore_v1_volume_proto_msgTypes[3]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -260,7 +399,7 @@ func (x *CreateVolumeRequest) String() string {
 func (*CreateVolumeRequest) ProtoMessage() {}
 
 func (x *CreateVolumeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_beanstore_v1_volume_proto_msgTypes[3]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -273,7 +412,7 @@ func (x *CreateVolumeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateVolumeRequest.ProtoReflect.Descriptor instead.
 func (*CreateVolumeRequest) Descriptor() ([]byte, []int) {
-	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{3}
+	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CreateVolumeRequest) GetVolumeId() string {
@@ -305,7 +444,7 @@ type CreateVolumeResponse struct {
 
 func (x *CreateVolumeResponse) Reset() {
 	*x = CreateVolumeResponse{}
-	mi := &file_beanstore_v1_volume_proto_msgTypes[4]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -317,7 +456,7 @@ func (x *CreateVolumeResponse) String() string {
 func (*CreateVolumeResponse) ProtoMessage() {}
 
 func (x *CreateVolumeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_beanstore_v1_volume_proto_msgTypes[4]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -330,7 +469,7 @@ func (x *CreateVolumeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateVolumeResponse.ProtoReflect.Descriptor instead.
 func (*CreateVolumeResponse) Descriptor() ([]byte, []int) {
-	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{4}
+	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{6}
 }
 
 type GetOperationRequest struct {
@@ -342,7 +481,7 @@ type GetOperationRequest struct {
 
 func (x *GetOperationRequest) Reset() {
 	*x = GetOperationRequest{}
-	mi := &file_beanstore_v1_volume_proto_msgTypes[5]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -354,7 +493,7 @@ func (x *GetOperationRequest) String() string {
 func (*GetOperationRequest) ProtoMessage() {}
 
 func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_beanstore_v1_volume_proto_msgTypes[5]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -367,7 +506,7 @@ func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationRequest.ProtoReflect.Descriptor instead.
 func (*GetOperationRequest) Descriptor() ([]byte, []int) {
-	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{5}
+	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetOperationRequest) GetOperationId() string {
@@ -392,7 +531,7 @@ type GetOperationResponse struct {
 
 func (x *GetOperationResponse) Reset() {
 	*x = GetOperationResponse{}
-	mi := &file_beanstore_v1_volume_proto_msgTypes[6]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -404,7 +543,7 @@ func (x *GetOperationResponse) String() string {
 func (*GetOperationResponse) ProtoMessage() {}
 
 func (x *GetOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_beanstore_v1_volume_proto_msgTypes[6]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -417,7 +556,7 @@ func (x *GetOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationResponse.ProtoReflect.Descriptor instead.
 func (*GetOperationResponse) Descriptor() ([]byte, []int) {
-	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{6}
+	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetOperationResponse) GetState() isGetOperationResponse_State {
@@ -499,7 +638,7 @@ type OperationPending struct {
 
 func (x *OperationPending) Reset() {
 	*x = OperationPending{}
-	mi := &file_beanstore_v1_volume_proto_msgTypes[7]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -511,7 +650,7 @@ func (x *OperationPending) String() string {
 func (*OperationPending) ProtoMessage() {}
 
 func (x *OperationPending) ProtoReflect() protoreflect.Message {
-	mi := &file_beanstore_v1_volume_proto_msgTypes[7]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -524,7 +663,7 @@ func (x *OperationPending) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationPending.ProtoReflect.Descriptor instead.
 func (*OperationPending) Descriptor() ([]byte, []int) {
-	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{7}
+	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{9}
 }
 
 type OperationProgress struct {
@@ -536,7 +675,7 @@ type OperationProgress struct {
 
 func (x *OperationProgress) Reset() {
 	*x = OperationProgress{}
-	mi := &file_beanstore_v1_volume_proto_msgTypes[8]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -548,7 +687,7 @@ func (x *OperationProgress) String() string {
 func (*OperationProgress) ProtoMessage() {}
 
 func (x *OperationProgress) ProtoReflect() protoreflect.Message {
-	mi := &file_beanstore_v1_volume_proto_msgTypes[8]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -561,7 +700,7 @@ func (x *OperationProgress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationProgress.ProtoReflect.Descriptor instead.
 func (*OperationProgress) Descriptor() ([]byte, []int) {
-	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{8}
+	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *OperationProgress) GetBytesDone() uint64 {
@@ -579,7 +718,7 @@ type OperationDone struct {
 
 func (x *OperationDone) Reset() {
 	*x = OperationDone{}
-	mi := &file_beanstore_v1_volume_proto_msgTypes[9]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -591,7 +730,7 @@ func (x *OperationDone) String() string {
 func (*OperationDone) ProtoMessage() {}
 
 func (x *OperationDone) ProtoReflect() protoreflect.Message {
-	mi := &file_beanstore_v1_volume_proto_msgTypes[9]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -604,7 +743,7 @@ func (x *OperationDone) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationDone.ProtoReflect.Descriptor instead.
 func (*OperationDone) Descriptor() ([]byte, []int) {
-	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{9}
+	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{11}
 }
 
 type OperationFailed struct {
@@ -616,7 +755,7 @@ type OperationFailed struct {
 
 func (x *OperationFailed) Reset() {
 	*x = OperationFailed{}
-	mi := &file_beanstore_v1_volume_proto_msgTypes[10]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -628,7 +767,7 @@ func (x *OperationFailed) String() string {
 func (*OperationFailed) ProtoMessage() {}
 
 func (x *OperationFailed) ProtoReflect() protoreflect.Message {
-	mi := &file_beanstore_v1_volume_proto_msgTypes[10]
+	mi := &file_beanstore_v1_volume_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -641,7 +780,7 @@ func (x *OperationFailed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationFailed.ProtoReflect.Descriptor instead.
 func (*OperationFailed) Descriptor() ([]byte, []int) {
-	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{10}
+	return file_beanstore_v1_volume_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *OperationFailed) GetReason() string {
@@ -665,7 +804,21 @@ const file_beanstore_v1_volume_proto_rawDesc = "" +
 	"used_bytes\x18\x04 \x01(\x04R\tusedBytes\"\x14\n" +
 	"\x12ListVolumesRequest\"E\n" +
 	"\x13ListVolumesResponse\x12.\n" +
-	"\avolumes\x18\x01 \x03(\v2\x14.beanstore.v1.VolumeR\avolumes\"t\n" +
+	"\avolumes\x18\x01 \x03(\v2\x14.beanstore.v1.VolumeR\avolumes\"\x16\n" +
+	"\x14GetNodeStatusRequest\"\xed\x03\n" +
+	"\x15GetNodeStatusResponse\x12&\n" +
+	"\x0fpool_size_bytes\x18\x01 \x01(\x04R\rpoolSizeBytes\x12&\n" +
+	"\x0fpool_used_bytes\x18\x02 \x01(\x04R\rpoolUsedBytes\x127\n" +
+	"\x18pool_metadata_size_bytes\x18\x03 \x01(\x04R\x15poolMetadataSizeBytes\x127\n" +
+	"\x18pool_metadata_used_bytes\x18\x04 \x01(\x04R\x15poolMetadataUsedBytes\x12'\n" +
+	"\x0fcommitted_bytes\x18\x05 \x01(\x04R\x0ecommittedBytes\x12Z\n" +
+	"\rvolume_counts\x18\x06 \x03(\v25.beanstore.v1.GetNodeStatusResponse.VolumeCountsEntryR\fvolumeCounts\x12+\n" +
+	"\x11beanstore_version\x18\a \x01(\tR\x10beanstoreVersion\x12\x1f\n" +
+	"\vlvm_version\x18\b \x01(\tR\n" +
+	"lvmVersion\x1a?\n" +
+	"\x11VolumeCountsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"t\n" +
 	"\x13CreateVolumeRequest\x12\x1b\n" +
 	"\tvolume_id\x18\x01 \x01(\tR\bvolumeId\x12\x1d\n" +
 	"\n" +
@@ -695,10 +848,11 @@ const file_beanstore_v1_volume_proto_rawDesc = "" +
 	"\x14VOLUME_STATE_PUSHING\x10\x04\x12\x19\n" +
 	"\x15VOLUME_STATE_INCOMING\x10\x05\x12\x18\n" +
 	"\x14VOLUME_STATE_RETIRED\x10\x06\x12\x19\n" +
-	"\x15VOLUME_STATE_DELETING\x10\a2\xba\x01\n" +
+	"\x15VOLUME_STATE_DELETING\x10\a2\x94\x02\n" +
 	"\rVolumeService\x12U\n" +
 	"\fCreateVolume\x12!.beanstore.v1.CreateVolumeRequest\x1a\".beanstore.v1.CreateVolumeResponse\x12R\n" +
-	"\vListVolumes\x12 .beanstore.v1.ListVolumesRequest\x1a!.beanstore.v1.ListVolumesResponse2i\n" +
+	"\vListVolumes\x12 .beanstore.v1.ListVolumesRequest\x1a!.beanstore.v1.ListVolumesResponse\x12X\n" +
+	"\rGetNodeStatus\x12\".beanstore.v1.GetNodeStatusRequest\x1a#.beanstore.v1.GetNodeStatusResponse2i\n" +
 	"\x10OperationService\x12U\n" +
 	"\fGetOperation\x12!.beanstore.v1.GetOperationRequest\x1a\".beanstore.v1.GetOperationResponseBAZ?github.com/The127/beanstore/client/gen/beanstore/v1;beanstorev1b\x06proto3"
 
@@ -715,39 +869,45 @@ func file_beanstore_v1_volume_proto_rawDescGZIP() []byte {
 }
 
 var file_beanstore_v1_volume_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_beanstore_v1_volume_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_beanstore_v1_volume_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_beanstore_v1_volume_proto_goTypes = []any{
-	(VolumeState)(0),             // 0: beanstore.v1.VolumeState
-	(*Volume)(nil),               // 1: beanstore.v1.Volume
-	(*ListVolumesRequest)(nil),   // 2: beanstore.v1.ListVolumesRequest
-	(*ListVolumesResponse)(nil),  // 3: beanstore.v1.ListVolumesResponse
-	(*CreateVolumeRequest)(nil),  // 4: beanstore.v1.CreateVolumeRequest
-	(*CreateVolumeResponse)(nil), // 5: beanstore.v1.CreateVolumeResponse
-	(*GetOperationRequest)(nil),  // 6: beanstore.v1.GetOperationRequest
-	(*GetOperationResponse)(nil), // 7: beanstore.v1.GetOperationResponse
-	(*OperationPending)(nil),     // 8: beanstore.v1.OperationPending
-	(*OperationProgress)(nil),    // 9: beanstore.v1.OperationProgress
-	(*OperationDone)(nil),        // 10: beanstore.v1.OperationDone
-	(*OperationFailed)(nil),      // 11: beanstore.v1.OperationFailed
+	(VolumeState)(0),              // 0: beanstore.v1.VolumeState
+	(*Volume)(nil),                // 1: beanstore.v1.Volume
+	(*ListVolumesRequest)(nil),    // 2: beanstore.v1.ListVolumesRequest
+	(*ListVolumesResponse)(nil),   // 3: beanstore.v1.ListVolumesResponse
+	(*GetNodeStatusRequest)(nil),  // 4: beanstore.v1.GetNodeStatusRequest
+	(*GetNodeStatusResponse)(nil), // 5: beanstore.v1.GetNodeStatusResponse
+	(*CreateVolumeRequest)(nil),   // 6: beanstore.v1.CreateVolumeRequest
+	(*CreateVolumeResponse)(nil),  // 7: beanstore.v1.CreateVolumeResponse
+	(*GetOperationRequest)(nil),   // 8: beanstore.v1.GetOperationRequest
+	(*GetOperationResponse)(nil),  // 9: beanstore.v1.GetOperationResponse
+	(*OperationPending)(nil),      // 10: beanstore.v1.OperationPending
+	(*OperationProgress)(nil),     // 11: beanstore.v1.OperationProgress
+	(*OperationDone)(nil),         // 12: beanstore.v1.OperationDone
+	(*OperationFailed)(nil),       // 13: beanstore.v1.OperationFailed
+	nil,                           // 14: beanstore.v1.GetNodeStatusResponse.VolumeCountsEntry
 }
 var file_beanstore_v1_volume_proto_depIdxs = []int32{
 	0,  // 0: beanstore.v1.Volume.state:type_name -> beanstore.v1.VolumeState
 	1,  // 1: beanstore.v1.ListVolumesResponse.volumes:type_name -> beanstore.v1.Volume
-	8,  // 2: beanstore.v1.GetOperationResponse.pending:type_name -> beanstore.v1.OperationPending
-	9,  // 3: beanstore.v1.GetOperationResponse.progress:type_name -> beanstore.v1.OperationProgress
-	10, // 4: beanstore.v1.GetOperationResponse.done:type_name -> beanstore.v1.OperationDone
-	11, // 5: beanstore.v1.GetOperationResponse.failed:type_name -> beanstore.v1.OperationFailed
-	4,  // 6: beanstore.v1.VolumeService.CreateVolume:input_type -> beanstore.v1.CreateVolumeRequest
-	2,  // 7: beanstore.v1.VolumeService.ListVolumes:input_type -> beanstore.v1.ListVolumesRequest
-	6,  // 8: beanstore.v1.OperationService.GetOperation:input_type -> beanstore.v1.GetOperationRequest
-	5,  // 9: beanstore.v1.VolumeService.CreateVolume:output_type -> beanstore.v1.CreateVolumeResponse
-	3,  // 10: beanstore.v1.VolumeService.ListVolumes:output_type -> beanstore.v1.ListVolumesResponse
-	7,  // 11: beanstore.v1.OperationService.GetOperation:output_type -> beanstore.v1.GetOperationResponse
-	9,  // [9:12] is the sub-list for method output_type
-	6,  // [6:9] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	14, // 2: beanstore.v1.GetNodeStatusResponse.volume_counts:type_name -> beanstore.v1.GetNodeStatusResponse.VolumeCountsEntry
+	10, // 3: beanstore.v1.GetOperationResponse.pending:type_name -> beanstore.v1.OperationPending
+	11, // 4: beanstore.v1.GetOperationResponse.progress:type_name -> beanstore.v1.OperationProgress
+	12, // 5: beanstore.v1.GetOperationResponse.done:type_name -> beanstore.v1.OperationDone
+	13, // 6: beanstore.v1.GetOperationResponse.failed:type_name -> beanstore.v1.OperationFailed
+	6,  // 7: beanstore.v1.VolumeService.CreateVolume:input_type -> beanstore.v1.CreateVolumeRequest
+	2,  // 8: beanstore.v1.VolumeService.ListVolumes:input_type -> beanstore.v1.ListVolumesRequest
+	4,  // 9: beanstore.v1.VolumeService.GetNodeStatus:input_type -> beanstore.v1.GetNodeStatusRequest
+	8,  // 10: beanstore.v1.OperationService.GetOperation:input_type -> beanstore.v1.GetOperationRequest
+	7,  // 11: beanstore.v1.VolumeService.CreateVolume:output_type -> beanstore.v1.CreateVolumeResponse
+	3,  // 12: beanstore.v1.VolumeService.ListVolumes:output_type -> beanstore.v1.ListVolumesResponse
+	5,  // 13: beanstore.v1.VolumeService.GetNodeStatus:output_type -> beanstore.v1.GetNodeStatusResponse
+	9,  // 14: beanstore.v1.OperationService.GetOperation:output_type -> beanstore.v1.GetOperationResponse
+	11, // [11:15] is the sub-list for method output_type
+	7,  // [7:11] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_beanstore_v1_volume_proto_init() }
@@ -755,7 +915,7 @@ func file_beanstore_v1_volume_proto_init() {
 	if File_beanstore_v1_volume_proto != nil {
 		return
 	}
-	file_beanstore_v1_volume_proto_msgTypes[6].OneofWrappers = []any{
+	file_beanstore_v1_volume_proto_msgTypes[8].OneofWrappers = []any{
 		(*GetOperationResponse_Pending)(nil),
 		(*GetOperationResponse_Progress)(nil),
 		(*GetOperationResponse_Done)(nil),
@@ -767,7 +927,7 @@ func file_beanstore_v1_volume_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_beanstore_v1_volume_proto_rawDesc), len(file_beanstore_v1_volume_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   11,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

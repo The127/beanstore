@@ -11,20 +11,23 @@ import (
 
 // LogicalVolume is one lv as reported by lvs.
 type LogicalVolume struct {
-	Name            string
-	UUID            string
-	VolumeGroup     string
-	SizeBytes       uint64
-	Attributes      string
-	Tags            []string
-	Pool            string
-	Origin          string
-	Path            string
-	DevicePath      string
-	DataPercent     float64
-	MetadataPercent float64
-	Active          bool
-	Layout          []string
+	Name        string
+	UUID        string
+	VolumeGroup string
+	SizeBytes   uint64
+	// MetadataSizeBytes is the metadata lv size, zero for lvs without
+	// one.
+	MetadataSizeBytes uint64
+	Attributes        string
+	Tags              []string
+	Pool              string
+	Origin            string
+	Path              string
+	DevicePath        string
+	DataPercent       float64
+	MetadataPercent   float64
+	Active            bool
+	Layout            []string
 }
 
 // CreateLogicalVolumeOptions configures CreateLogicalVolume.
@@ -476,7 +479,7 @@ func (c *Client) ListLogicalVolumes(ctx context.Context, opts ListLogicalVolumes
 		"--units", "b",
 		"--nosuffix",
 		"--binary",
-		"-o", "lv_name,lv_uuid,vg_name,lv_size,lv_attr,lv_tags,pool_lv,origin,"+
+		"-o", "lv_name,lv_uuid,vg_name,lv_size,lv_metadata_size,lv_attr,lv_tags,pool_lv,origin,"+
 			"lv_path,lv_dm_path,data_percent,metadata_percent,lv_active,lv_layout",
 	)
 	if opts.All {
@@ -543,6 +546,7 @@ type rawLV struct {
 	UUID            string `json:"lv_uuid"`
 	VG              string `json:"vg_name"`
 	Size            string `json:"lv_size"`
+	MetadataSize    string `json:"lv_metadata_size"`
 	Attr            string `json:"lv_attr"`
 	Tags            string `json:"lv_tags"`
 	Pool            string `json:"pool_lv"`
@@ -579,6 +583,14 @@ func parseLVReport(output []byte) ([]LogicalVolume, error) {
 			}
 		}
 
+		metadataSize := uint64(0)
+		if lv.MetadataSize != "" {
+			metadataSize, err = strconv.ParseUint(lv.MetadataSize, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing metadata size of %s/%s: %w", lv.VG, lv.Name, err)
+			}
+		}
+
 		dataPercent, err := parsePercent(lv.DataPercent)
 		if err != nil {
 			return nil, fmt.Errorf("parsing data percent of %s/%s: %w", lv.VG, lv.Name, err)
@@ -590,18 +602,19 @@ func parseLVReport(output []byte) ([]LogicalVolume, error) {
 		}
 
 		volumes = append(volumes, LogicalVolume{
-			Name:            lv.Name,
-			UUID:            lv.UUID,
-			VolumeGroup:     lv.VG,
-			SizeBytes:       size,
-			Attributes:      lv.Attr,
-			Tags:            splitList(lv.Tags),
-			Pool:            lv.Pool,
-			Origin:          lv.Origin,
-			Path:            lv.Path,
-			DevicePath:      lv.DMPath,
-			DataPercent:     dataPercent,
-			MetadataPercent: metadataPercent,
+			Name:              lv.Name,
+			UUID:              lv.UUID,
+			VolumeGroup:       lv.VG,
+			SizeBytes:         size,
+			MetadataSizeBytes: metadataSize,
+			Attributes:        lv.Attr,
+			Tags:              splitList(lv.Tags),
+			Pool:              lv.Pool,
+			Origin:            lv.Origin,
+			Path:              lv.Path,
+			DevicePath:        lv.DMPath,
+			DataPercent:       dataPercent,
+			MetadataPercent:   metadataPercent,
 			// lv_active reports "active" as a string on some lvm
 			// versions and 0/1 with --binary on others
 			Active: lv.Active == "1" || lv.Active == "active",

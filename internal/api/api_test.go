@@ -86,6 +86,30 @@ func TestListVolumesMapsToProto(t *testing.T) {
 	assert.Zero(t, response.Volumes[0].UsedBytes)
 }
 
+const poolLVs = `{"report": [{"lv": [
+	{"lv_name": "pool0", "lv_uuid": "uuid-p", "vg_name": "vg0",
+	 "lv_size": "1073741824", "lv_metadata_size": "4194304",
+	 "lv_attr": "twi-aotz--", "lv_tags": "", "pool_lv": "", "origin": "",
+	 "lv_path": "", "lv_dm_path": "", "data_percent": "50.00",
+	 "metadata_percent": "25.00", "lv_active": "active",
+	 "lv_layout": "pool,thin"}
+]}], "log": []}`
+
+func TestGetNodeStatusAggregates(t *testing.T) {
+	volumes, _ := testServer(t, &fakeRunner{outputs: []string{poolLVs, scanLVs}})
+
+	response, err := volumes.GetNodeStatus(t.Context(), &beanstorev1.GetNodeStatusRequest{})
+
+	require.NoError(t, err)
+	assert.Equal(t, uint64(1<<30), response.PoolSizeBytes)
+	assert.Equal(t, uint64(1<<29), response.PoolUsedBytes)
+	assert.Equal(t, uint64(4<<20), response.PoolMetadataSizeBytes)
+	assert.Equal(t, uint64(1<<20), response.PoolMetadataUsedBytes)
+	assert.Equal(t, uint64(1<<30), response.CommittedBytes)
+	assert.Equal(t, map[string]uint32{"creating": 1}, response.VolumeCounts)
+	assert.NotEmpty(t, response.BeanstoreVersion)
+}
+
 func TestCreateVolumeRunsToDone(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{noLVs}}
 	volumes, operationsServer := testServer(t, fake)

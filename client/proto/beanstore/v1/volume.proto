@@ -13,6 +13,9 @@ service VolumeService {
 
   // ListVolumes reports the node's volumes and their states.
   rpc ListVolumes(ListVolumesRequest) returns (ListVolumesResponse);
+
+  // GetNodeStatus reports the node's capacity and versions.
+  rpc GetNodeStatus(GetNodeStatusRequest) returns (GetNodeStatusResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -47,6 +50,22 @@ message ListVolumesRequest {}
 
 message ListVolumesResponse {
   repeated Volume volumes = 1;
+}
+
+message GetNodeStatusRequest {}
+
+message GetNodeStatusResponse {
+  uint64 pool_size_bytes = 1;
+  uint64 pool_used_bytes = 2;
+  // A full metadata lv makes the pool unusable, watch these two.
+  uint64 pool_metadata_size_bytes = 3;
+  uint64 pool_metadata_used_bytes = 4;
+  // committed_bytes is the sum of all volume virtual sizes.
+  uint64 committed_bytes = 5;
+  // volume_counts is the number of volumes per state name.
+  map<string, uint32> volume_counts = 6;
+  string beanstore_version = 7;
+  string lvm_version = 8;
 }
 
 message CreateVolumeRequest {

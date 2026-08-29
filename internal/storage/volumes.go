@@ -107,6 +107,51 @@ func VolumeExists(ctx context.Context, client *lvm.Client, cfg config.Config, id
 	return len(lvs) > 0, nil
 }
 
+// NodeStatus is the node's capacity as read from the pool and its
+// volumes.
+type NodeStatus struct {
+	PoolSizeBytes         uint64
+	PoolUsedBytes         uint64
+	PoolMetadataSizeBytes uint64
+	PoolMetadataUsedBytes uint64
+	CommittedBytes        uint64
+	VolumeCounts          map[State]uint32
+}
+
+// GetNodeStatus reads the pool's usage and aggregates the volume scan.
+func GetNodeStatus(ctx context.Context, client *lvm.Client, cfg config.Config) (NodeStatus, error) {
+	pools, err := client.ListLogicalVolumes(ctx, lvm.ListLogicalVolumesOptions{
+		VG:     cfg.VolumeGroup,
+		Select: lvm.Select("lv_name = " + cfg.ThinPool),
+	})
+	if err != nil {
+		return NodeStatus{}, fmt.Errorf("reading pool %s/%s: %w", cfg.VolumeGroup, cfg.ThinPool, err)
+	}
+	if len(pools) == 0 {
+		return NodeStatus{}, fmt.Errorf("pool %s/%s is gone", cfg.VolumeGroup, cfg.ThinPool)
+	}
+	pool := pools[0]
+
+	volumes, err := ListVolumes(ctx, client, cfg)
+	if err != nil {
+		return NodeStatus{}, err
+	}
+
+	status := NodeStatus{
+		PoolSizeBytes:         pool.SizeBytes,
+		PoolUsedBytes:         uint64(float64(pool.SizeBytes) * pool.DataPercent / 100),
+		PoolMetadataSizeBytes: pool.MetadataSizeBytes,
+		PoolMetadataUsedBytes: uint64(float64(pool.MetadataSizeBytes) * pool.MetadataPercent / 100),
+		VolumeCounts:          map[State]uint32{},
+	}
+	for _, volume := range volumes {
+		status.CommittedBytes += volume.SizeBytes
+		status.VolumeCounts[volume.State]++
+	}
+
+	return status, nil
+}
+
 func stateOf(tags []string) (State, bool) {
 	for _, tag := range tags {
 		value, found := strings.CutPrefix(tag, stateTagPrefix)

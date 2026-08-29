@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	VolumeService_CreateVolume_FullMethodName = "/beanstore.v1.VolumeService/CreateVolume"
-	VolumeService_ListVolumes_FullMethodName  = "/beanstore.v1.VolumeService/ListVolumes"
+	VolumeService_CreateVolume_FullMethodName  = "/beanstore.v1.VolumeService/CreateVolume"
+	VolumeService_ListVolumes_FullMethodName   = "/beanstore.v1.VolumeService/ListVolumes"
+	VolumeService_GetNodeStatus_FullMethodName = "/beanstore.v1.VolumeService/GetNodeStatus"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -35,6 +36,8 @@ type VolumeServiceClient interface {
 	CreateVolume(ctx context.Context, in *CreateVolumeRequest, opts ...grpc.CallOption) (*CreateVolumeResponse, error)
 	// ListVolumes reports the node's volumes and their states.
 	ListVolumes(ctx context.Context, in *ListVolumesRequest, opts ...grpc.CallOption) (*ListVolumesResponse, error)
+	// GetNodeStatus reports the node's capacity and versions.
+	GetNodeStatus(ctx context.Context, in *GetNodeStatusRequest, opts ...grpc.CallOption) (*GetNodeStatusResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -65,6 +68,16 @@ func (c *volumeServiceClient) ListVolumes(ctx context.Context, in *ListVolumesRe
 	return out, nil
 }
 
+func (c *volumeServiceClient) GetNodeStatus(ctx context.Context, in *GetNodeStatusRequest, opts ...grpc.CallOption) (*GetNodeStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetNodeStatusResponse)
+	err := c.cc.Invoke(ctx, VolumeService_GetNodeStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -77,6 +90,8 @@ type VolumeServiceServer interface {
 	CreateVolume(context.Context, *CreateVolumeRequest) (*CreateVolumeResponse, error)
 	// ListVolumes reports the node's volumes and their states.
 	ListVolumes(context.Context, *ListVolumesRequest) (*ListVolumesResponse, error)
+	// GetNodeStatus reports the node's capacity and versions.
+	GetNodeStatus(context.Context, *GetNodeStatusRequest) (*GetNodeStatusResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -92,6 +107,9 @@ func (UnimplementedVolumeServiceServer) CreateVolume(context.Context, *CreateVol
 }
 func (UnimplementedVolumeServiceServer) ListVolumes(context.Context, *ListVolumesRequest) (*ListVolumesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListVolumes not implemented")
+}
+func (UnimplementedVolumeServiceServer) GetNodeStatus(context.Context, *GetNodeStatusRequest) (*GetNodeStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetNodeStatus not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -150,6 +168,24 @@ func _VolumeService_ListVolumes_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_GetNodeStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).GetNodeStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_GetNodeStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).GetNodeStatus(ctx, req.(*GetNodeStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -164,6 +200,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListVolumes",
 			Handler:    _VolumeService_ListVolumes_Handler,
+		},
+		{
+			MethodName: "GetNodeStatus",
+			Handler:    _VolumeService_GetNodeStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
