@@ -122,10 +122,16 @@ func TestListPhysicalVolumesBuildsCommandAndParses(t *testing.T) {
 	fake := &fakeRunner{output: []byte(`{
 		"report": [{"pv": [
 			{"pv_name": "/dev/loop0", "pv_uuid": "aaaa11-2222", "vg_name": "",
-			 "pv_size": "1073741824", "pv_free": "1073741824", "pv_attr": "---",
-			 "pv_tags": ""},
+			 "pv_size": "1073741824", "pv_free": "1073741824",
+			 "dev_size": "1073741824", "pv_attr": "---", "pv_tags": "",
+			 "pv_allocatable": "0", "pv_exported": "0", "pv_missing": "0",
+			 "pv_in_use": "0", "pv_duplicate": "0", "pv_mda_count": "1",
+			 "pv_mda_used_count": "1"},
 			{"pv_name": "/dev/sda2", "vg_name": "vg0", "pv_size": "512110190592",
-			 "pv_free": "10737418240", "pv_attr": "a--", "pv_tags": "fast,ssd"}
+			 "pv_free": "10737418240", "dev_size": "512110190592",
+			 "pv_attr": "a--", "pv_tags": "fast,ssd", "pv_allocatable": "1",
+			 "pv_exported": "0", "pv_missing": "0", "pv_in_use": "1",
+			 "pv_duplicate": "0", "pv_mda_count": "1", "pv_mda_used_count": "1"}
 		]}], "log": []}`)}
 	client := New(WithRunner(fake))
 
@@ -137,27 +143,37 @@ func TestListPhysicalVolumesBuildsCommandAndParses(t *testing.T) {
 		"--reportformat", "json",
 		"--units", "b",
 		"--nosuffix",
-		"-o", "pv_name,pv_uuid,vg_name,pv_size,pv_free,pv_attr,pv_tags",
+		"--binary",
+		"-o", "pv_name,pv_uuid,vg_name,pv_size,pv_free,dev_size,pv_attr,pv_tags," +
+			"pv_allocatable,pv_exported,pv_missing,pv_in_use,pv_duplicate," +
+			"pv_mda_count,pv_mda_used_count",
 	}, fake.calls[0].Args())
 
 	require.Len(t, pvs, 2)
 	assert.Equal(t, PhysicalVolume{
-		Device:      "/dev/loop0",
-		UUID:        "aaaa11-2222",
-		VolumeGroup: "",
-		SizeBytes:   1073741824,
-		FreeBytes:   1073741824,
-		Attributes:  "---",
-		Tags:        nil,
+		Device:            "/dev/loop0",
+		UUID:              "aaaa11-2222",
+		VolumeGroup:       "",
+		SizeBytes:         1073741824,
+		FreeBytes:         1073741824,
+		DeviceSizeBytes:   1073741824,
+		Attributes:        "---",
+		Tags:              nil,
+		Allocatable:       false,
+		MetadataAreas:     1,
+		UsedMetadataAreas: 1,
 	}, pvs[0])
 	assert.Equal(t, []string{"fast", "ssd"}, pvs[1].Tags)
 	assert.Equal(t, "vg0", pvs[1].VolumeGroup)
+	assert.True(t, pvs[1].Allocatable)
+	assert.True(t, pvs[1].InUse)
 }
 
 func TestListPhysicalVolumesRejectsMalformedSize(t *testing.T) {
 	fake := &fakeRunner{output: []byte(`{
 		"report": [{"pv": [
-			{"pv_name": "/dev/loop0", "pv_size": "a lot", "pv_free": "0"}
+			{"pv_name": "/dev/loop0", "pv_size": "a lot", "pv_free": "0",
+			 "dev_size": "0", "pv_mda_count": "0", "pv_mda_used_count": "0"}
 		]}]}`)}
 	client := New(WithRunner(fake))
 

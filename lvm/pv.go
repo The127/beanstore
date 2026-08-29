@@ -11,13 +11,21 @@ import (
 
 // PhysicalVolume is one pv as reported by pvs.
 type PhysicalVolume struct {
-	Device      Device
-	UUID        string
-	VolumeGroup string
-	SizeBytes   uint64
-	FreeBytes   uint64
-	Attributes  string
-	Tags        []string
+	Device            Device
+	UUID              string
+	VolumeGroup       string
+	SizeBytes         uint64
+	FreeBytes         uint64
+	DeviceSizeBytes   uint64
+	Attributes        string
+	Tags              []string
+	Allocatable       bool
+	Exported          bool
+	Missing           bool
+	InUse             bool
+	Duplicate         bool
+	MetadataAreas     uint64
+	UsedMetadataAreas uint64
 }
 
 // CreatePhysicalVolumeOptions configures CreatePhysicalVolume.
@@ -67,7 +75,10 @@ func (c *Client) ListPhysicalVolumes(ctx context.Context, opts ListPhysicalVolum
 		"--reportformat", "json",
 		"--units", "b",
 		"--nosuffix",
-		"-o", "pv_name,pv_uuid,vg_name,pv_size,pv_free,pv_attr,pv_tags",
+		"--binary",
+		"-o", "pv_name,pv_uuid,vg_name,pv_size,pv_free,dev_size,pv_attr,pv_tags,"+
+			"pv_allocatable,pv_exported,pv_missing,pv_in_use,pv_duplicate,"+
+			"pv_mda_count,pv_mda_used_count",
 	)
 	if opts.Select != "" {
 		cmd = cmd.Append("-S", string(opts.Select))
@@ -209,13 +220,21 @@ func flagValue(value bool) string {
 type pvReport struct {
 	Report []struct {
 		PV []struct {
-			Name string `json:"pv_name"`
-			UUID string `json:"pv_uuid"`
-			VG   string `json:"vg_name"`
-			Size string `json:"pv_size"`
-			Free string `json:"pv_free"`
-			Attr string `json:"pv_attr"`
-			Tags string `json:"pv_tags"`
+			Name        string `json:"pv_name"`
+			UUID        string `json:"pv_uuid"`
+			VG          string `json:"vg_name"`
+			Size        string `json:"pv_size"`
+			Free        string `json:"pv_free"`
+			DevSize     string `json:"dev_size"`
+			Attr        string `json:"pv_attr"`
+			Tags        string `json:"pv_tags"`
+			Allocatable string `json:"pv_allocatable"`
+			Exported    string `json:"pv_exported"`
+			Missing     string `json:"pv_missing"`
+			InUse       string `json:"pv_in_use"`
+			Duplicate   string `json:"pv_duplicate"`
+			MDACount    string `json:"pv_mda_count"`
+			MDAUsed     string `json:"pv_mda_used_count"`
 		} `json:"pv"`
 	} `json:"report"`
 }
@@ -240,6 +259,21 @@ func parsePVReport(output []byte) ([]PhysicalVolume, error) {
 				return nil, fmt.Errorf("parsing free space of %s: %w", pv.Name, err)
 			}
 
+			devSize, err := strconv.ParseUint(pv.DevSize, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing device size of %s: %w", pv.Name, err)
+			}
+
+			mdaCount, err := strconv.ParseUint(pv.MDACount, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing metadata area count of %s: %w", pv.Name, err)
+			}
+
+			mdaUsed, err := strconv.ParseUint(pv.MDAUsed, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing used metadata area count of %s: %w", pv.Name, err)
+			}
+
 			// tags may not contain commas, splitting is unambiguous
 			var tags []string
 			if pv.Tags != "" {
@@ -247,13 +281,21 @@ func parsePVReport(output []byte) ([]PhysicalVolume, error) {
 			}
 
 			volumes = append(volumes, PhysicalVolume{
-				Device:      Device(pv.Name),
-				UUID:        pv.UUID,
-				VolumeGroup: pv.VG,
-				SizeBytes:   size,
-				FreeBytes:   free,
-				Attributes:  pv.Attr,
-				Tags:        tags,
+				Device:            Device(pv.Name),
+				UUID:              pv.UUID,
+				VolumeGroup:       pv.VG,
+				SizeBytes:         size,
+				FreeBytes:         free,
+				DeviceSizeBytes:   devSize,
+				Attributes:        pv.Attr,
+				Tags:              tags,
+				Allocatable:       pv.Allocatable == "1",
+				Exported:          pv.Exported == "1",
+				Missing:           pv.Missing == "1",
+				InUse:             pv.InUse == "1",
+				Duplicate:         pv.Duplicate == "1",
+				MetadataAreas:     mdaCount,
+				UsedMetadataAreas: mdaUsed,
 			})
 		}
 	}

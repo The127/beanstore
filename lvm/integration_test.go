@@ -153,15 +153,11 @@ func TestIntegrationPhysicalVolumeAllocatable(t *testing.T) {
 
 	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{Allocatable: Bool(false)}))
 
-	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
-	require.NoError(t, err)
-	assert.NotEqual(t, "a", pvs[0].Attributes[:1])
+	assert.False(t, pvByDevice(t, client, loop).Allocatable)
 
 	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{Allocatable: Bool(true)}))
 
-	pvs, err = client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, "a", pvs[0].Attributes[:1])
+	assert.True(t, pvByDevice(t, client, loop).Allocatable)
 }
 
 func TestIntegrationPhysicalVolumeResize(t *testing.T) {
@@ -220,7 +216,6 @@ func TestIntegrationMetadataIgnoreRoundTrip(t *testing.T) {
 	// needs a second pv keeping one
 	first := loopDevice(t)
 	second := loopDevice(t)
-	devices := string(first) + "," + string(second)
 	client := New(WithRunner(sudoRunner{}), WithDevices(first, second))
 	ctx := t.Context()
 
@@ -230,15 +225,26 @@ func TestIntegrationMetadataIgnoreRoundTrip(t *testing.T) {
 
 	require.NoError(t, client.ChangePhysicalVolume(ctx, first, ChangePhysicalVolumeOptions{MetadataIgnore: Bool(true)}))
 
-	output, err := sudoRun(ctx, "lvm", "pvs", "--devices", devices, "--noheadings", "-o", "pv_mda_used_count", string(first))
-	require.NoError(t, err)
-	assert.Equal(t, "0", strings.TrimSpace(string(output)))
+	assert.Zero(t, pvByDevice(t, client, first).UsedMetadataAreas)
 
 	require.NoError(t, client.ChangePhysicalVolume(ctx, first, ChangePhysicalVolumeOptions{MetadataIgnore: Bool(false)}))
 
-	output, err = sudoRun(ctx, "lvm", "pvs", "--devices", devices, "--noheadings", "-o", "pv_mda_used_count", string(first))
+	assert.Equal(t, uint64(1), pvByDevice(t, client, first).UsedMetadataAreas)
+}
+
+func pvByDevice(t *testing.T, client *Client, device Device) PhysicalVolume {
+	t.Helper()
+
+	pvs, err := client.ListPhysicalVolumes(t.Context(), ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, "1", strings.TrimSpace(string(output)))
+	for _, pv := range pvs {
+		if pv.Device == device {
+			return pv
+		}
+	}
+
+	t.Fatalf("pv %s not found", device)
+	return PhysicalVolume{}
 }
 
 func TestIntegrationResizeToShrinksOrphanPV(t *testing.T) {
