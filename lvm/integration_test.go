@@ -498,3 +498,85 @@ func TestIntegrationVolumeGroupActivationCheckDisplayScan(t *testing.T) {
 
 	require.NoError(t, client.ScanVolumeGroups(ctx, ScanVolumeGroupsOptions{}))
 }
+
+func TestIntegrationMetadataBackupRestore(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	name := vgFor(t, loop)
+
+	backup := filepath.Join(t.TempDir(), "vg.backup")
+	require.NoError(t, os.Chmod(filepath.Dir(backup), 0o755))
+	require.NoError(t, client.BackupVolumeGroupMetadata(ctx, name, BackupVolumeGroupMetadataOptions{File: backup}))
+
+	require.NoError(t, client.ChangeVolumeGroup(ctx, Name(name), ChangeVolumeGroupOptions{
+		AddTags: []string{"after-backup"},
+	}))
+
+	require.NoError(t, client.DeactivateVolumeGroup(ctx, Name(name), DeactivateVolumeGroupOptions{}))
+	require.NoError(t, client.RestoreVolumeGroupMetadata(ctx, name, RestoreVolumeGroupMetadataOptions{File: backup}))
+
+	vgs, err := client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{})
+	require.NoError(t, err)
+	require.Len(t, vgs, 1)
+	assert.Empty(t, vgs[0].Tags, "restore must roll back the tag added after the backup")
+}
+
+func TestIntegrationExportImportRoundTrip(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	name := vgFor(t, loop)
+
+	require.NoError(t, client.DeactivateVolumeGroup(ctx, Name(name), DeactivateVolumeGroupOptions{}))
+	require.NoError(t, client.ExportVolumeGroup(ctx, Name(name), ExportVolumeGroupOptions{}))
+
+	vgs, err := client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{})
+	require.NoError(t, err)
+	require.Len(t, vgs, 1)
+	assert.True(t, vgs[0].Exported)
+
+	require.NoError(t, client.ImportVolumeGroup(ctx, Name(name), ImportVolumeGroupOptions{}))
+
+	vgs, err = client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{})
+	require.NoError(t, err)
+	assert.False(t, vgs[0].Exported)
+}
+
+func TestIntegrationMergeAndSplit(t *testing.T) {
+	first := loopDevice(t)
+	second := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(first, second))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, first, CreatePhysicalVolumeOptions{}))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, second, CreatePhysicalVolumeOptions{}))
+
+	name := vgFor(t, first)
+	other := name + "-b"
+	require.NoError(t, client.CreateVolumeGroup(ctx, other, []Device{second}, CreateVolumeGroupOptions{}))
+	t.Cleanup(func() {
+		//nolint:usetesting // t.Context is done during cleanup
+		_ = client.RemoveVolumeGroup(context.Background(), other, RemoveVolumeGroupOptions{Force: true})
+	})
+
+	require.NoError(t, client.DeactivateVolumeGroup(ctx, Name(other), DeactivateVolumeGroupOptions{}))
+	require.NoError(t, client.MergeVolumeGroups(ctx, name, other, MergeVolumeGroupsOptions{}))
+
+	vgs, err := client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{})
+	require.NoError(t, err)
+	require.Len(t, vgs, 1)
+	assert.Equal(t, uint64(2), vgs[0].PVCount)
+
+	require.NoError(t, client.SplitVolumeGroup(ctx, name, other, []Device{second}, SplitVolumeGroupOptions{}))
+
+	vgs, err = client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{})
+	require.NoError(t, err)
+	assert.Len(t, vgs, 2)
+
+	require.NoError(t, client.MakeVolumeGroupNodes(ctx, name, MakeVolumeGroupNodesOptions{}))
+}

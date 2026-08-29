@@ -568,3 +568,271 @@ func (c *Client) ScanVolumeGroups(ctx context.Context, opts ScanVolumeGroupsOpti
 
 	return nil
 }
+
+// BackupVolumeGroupMetadataOptions configures BackupVolumeGroupMetadata.
+type BackupVolumeGroupMetadataOptions struct {
+	CommonOptions
+	// File writes the backup to this path instead of /etc/lvm/backup.
+	File string
+}
+
+// BackupVolumeGroupMetadata writes a metadata backup of the given vg,
+// of all vgs when the name is empty.
+func (c *Client) BackupVolumeGroupMetadata(ctx context.Context, name string, opts BackupVolumeGroupMetadataOptions) error {
+	if opts.Autobackup != nil {
+		return errAutobackupNotSupported
+	}
+
+	cmd := c.command("vgcfgbackup", opts.CommonOptions)
+	if opts.File != "" {
+		cmd = cmd.Append("-f", opts.File)
+	}
+	if name != "" {
+		cmd = cmd.Append(name)
+	}
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("backing up volume group metadata of %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// RestoreVolumeGroupMetadataOptions configures RestoreVolumeGroupMetadata.
+type RestoreVolumeGroupMetadataOptions struct {
+	CommonOptions
+	// File restores from this path instead of the last backup.
+	File string
+	// Force is required to restore vgs containing thin pools.
+	Force bool
+}
+
+// RestoreVolumeGroupMetadata restores the given vg's metadata from its
+// last backup or the given file.
+func (c *Client) RestoreVolumeGroupMetadata(ctx context.Context, name string, opts RestoreVolumeGroupMetadataOptions) error {
+	cmd := c.metadataCommand("vgcfgrestore", opts.CommonOptions)
+	if opts.File != "" {
+		cmd = cmd.Append("-f", opts.File)
+	}
+	if opts.Force {
+		cmd = cmd.Append("--force")
+	}
+	cmd = cmd.Append(name)
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("restoring volume group metadata of %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// ListVolumeGroupMetadataBackupsOptions configures
+// ListVolumeGroupMetadataBackups.
+type ListVolumeGroupMetadataBackupsOptions struct {
+	CommonOptions
+}
+
+// ListVolumeGroupMetadataBackups returns lvm's human readable listing
+// of the metadata backups of the given vg.
+func (c *Client) ListVolumeGroupMetadataBackups(ctx context.Context, name string, opts ListVolumeGroupMetadataBackupsOptions) (string, error) {
+	if opts.Autobackup != nil {
+		return "", errAutobackupNotSupported
+	}
+
+	cmd := c.command("vgcfgrestore", opts.CommonOptions).Append("-l", name)
+
+	output, err := c.run(ctx, cmd)
+	if err != nil {
+		return "", fmt.Errorf("listing metadata backups of %s: %w", name, err)
+	}
+
+	return string(output), nil
+}
+
+// ExportVolumeGroupOptions configures ExportVolumeGroup.
+type ExportVolumeGroupOptions struct {
+	CommonOptions
+}
+
+// ExportVolumeGroup unregisters the vgs the target selects from the
+// system, making them inactive and invisible until imported again.
+func (c *Client) ExportVolumeGroup(ctx context.Context, target Selector, opts ExportVolumeGroupOptions) error {
+	if opts.Autobackup != nil {
+		return errAutobackupNotSupported
+	}
+
+	cmd := c.command("vgexport", opts.CommonOptions)
+
+	cmd, err := appendSelector(cmd, target, "-a")
+	if err != nil {
+		return err
+	}
+
+	_, err = c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("exporting volume groups %v: %w", target, err)
+	}
+
+	return nil
+}
+
+// ImportVolumeGroupOptions configures ImportVolumeGroup.
+type ImportVolumeGroupOptions struct {
+	CommonOptions
+}
+
+// ImportVolumeGroup registers previously exported vgs the target
+// selects with the system.
+func (c *Client) ImportVolumeGroup(ctx context.Context, target Selector, opts ImportVolumeGroupOptions) error {
+	if opts.Autobackup != nil {
+		return errAutobackupNotSupported
+	}
+
+	cmd := c.command("vgimport", opts.CommonOptions)
+
+	cmd, err := appendSelector(cmd, target, "-a")
+	if err != nil {
+		return err
+	}
+
+	_, err = c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("importing volume groups %v: %w", target, err)
+	}
+
+	return nil
+}
+
+// MergeVolumeGroupsOptions configures MergeVolumeGroups.
+type MergeVolumeGroupsOptions struct {
+	CommonOptions
+}
+
+// MergeVolumeGroups merges the source vg into the destination vg. The
+// source must be inactive.
+func (c *Client) MergeVolumeGroups(ctx context.Context, destination, source string, opts MergeVolumeGroupsOptions) error {
+	cmd := c.metadataCommand("vgmerge", opts.CommonOptions).Append(destination, source)
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("merging volume group %s into %s: %w", source, destination, err)
+	}
+
+	return nil
+}
+
+// SplitVolumeGroupOptions configures SplitVolumeGroup.
+type SplitVolumeGroupOptions struct {
+	CommonOptions
+	// LVName moves the pvs backing this lv instead of named devices.
+	LVName string
+}
+
+// SplitVolumeGroup moves pvs from the source vg into the destination
+// vg, which is created if needed: the given devices, or per options the
+// pvs backing an lv.
+func (c *Client) SplitVolumeGroup(ctx context.Context, source, destination string, devices []Device, opts SplitVolumeGroupOptions) error {
+	if (len(devices) > 0) == (opts.LVName != "") {
+		return errors.New("splitting a volume group requires exactly one of devices or LVName")
+	}
+
+	cmd := c.metadataCommand("vgsplit", opts.CommonOptions)
+	if opts.LVName != "" {
+		cmd = cmd.Append("-n", opts.LVName)
+	}
+	cmd = cmd.Append(source, destination)
+	for _, device := range devices {
+		cmd = cmd.Append(string(device))
+	}
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("splitting volume group %s into %s: %w", source, destination, err)
+	}
+
+	return nil
+}
+
+// MakeVolumeGroupNodesOptions configures MakeVolumeGroupNodes.
+type MakeVolumeGroupNodesOptions struct {
+	CommonOptions
+}
+
+// MakeVolumeGroupNodes recreates the device nodes of the given vg under
+// /dev, of all vgs when the name is empty.
+func (c *Client) MakeVolumeGroupNodes(ctx context.Context, name string, opts MakeVolumeGroupNodesOptions) error {
+	if opts.Autobackup != nil {
+		return errAutobackupNotSupported
+	}
+
+	cmd := c.command("vgmknodes", opts.CommonOptions)
+	if name != "" {
+		cmd = cmd.Append(name)
+	}
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("making volume group nodes of %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// ImportClonedVolumeGroupOptions configures ImportClonedVolumeGroup.
+type ImportClonedVolumeGroupOptions struct {
+	CommonOptions
+	// BaseName names the imported vg instead of an appended number.
+	BaseName string
+}
+
+// ImportClonedVolumeGroup regenerates the identities of a cloned vg on
+// the given devices so it can coexist with the original.
+func (c *Client) ImportClonedVolumeGroup(ctx context.Context, devices []Device, opts ImportClonedVolumeGroupOptions) error {
+	if opts.Autobackup != nil {
+		return errAutobackupNotSupported
+	}
+
+	cmd := c.command("vgimportclone", opts.CommonOptions)
+	if opts.BaseName != "" {
+		cmd = cmd.Append("-n", opts.BaseName)
+	}
+	for _, device := range devices {
+		cmd = cmd.Append(string(device))
+	}
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("importing cloned volume group: %w", err)
+	}
+
+	return nil
+}
+
+// ImportVolumeGroupDevicesOptions configures ImportVolumeGroupDevices.
+type ImportVolumeGroupDevicesOptions struct {
+	CommonOptions
+}
+
+// ImportVolumeGroupDevices adds the devices of the vgs the target
+// selects to the system devices file.
+func (c *Client) ImportVolumeGroupDevices(ctx context.Context, target Selector, opts ImportVolumeGroupDevicesOptions) error {
+	if opts.Autobackup != nil {
+		return errAutobackupNotSupported
+	}
+
+	cmd := c.command("vgimportdevices", opts.CommonOptions)
+
+	cmd, err := appendSelector(cmd, target, "-a")
+	if err != nil {
+		return err
+	}
+
+	_, err = c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("importing volume group devices %v: %w", target, err)
+	}
+
+	return nil
+}

@@ -30,6 +30,16 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `CheckVolumeGroup` | `vgck` |
 | `DisplayVolumeGroup` | `vgdisplay` |
 | `ScanVolumeGroups` | `vgscan` |
+| `BackupVolumeGroupMetadata` | `vgcfgbackup` |
+| `RestoreVolumeGroupMetadata` | `vgcfgrestore` |
+| `ListVolumeGroupMetadataBackups` | `vgcfgrestore -l` |
+| `ExportVolumeGroup` | `vgexport` |
+| `ImportVolumeGroup` | `vgimport` |
+| `MergeVolumeGroups` | `vgmerge` |
+| `SplitVolumeGroup` | `vgsplit` |
+| `MakeVolumeGroupNodes` | `vgmknodes` |
+| `ImportClonedVolumeGroup` | `vgimportclone` |
+| `ImportVolumeGroupDevices` | `vgimportdevices` |
 
 Every operation takes an options struct. Its fields cover the command's
 flags, and the embedded `CommonOptions` override the client environment

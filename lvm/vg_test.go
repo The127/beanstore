@@ -306,3 +306,106 @@ func TestScanVolumeGroupsBuildsCommand(t *testing.T) {
 	assert.Equal(t, []string{"vgscan"}, fake.calls[0].Args())
 	assert.Equal(t, []string{"vgscan", "--mknodes"}, fake.calls[1].Args())
 }
+
+func TestBackupAndRestoreMetadataBuildCommands(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.BackupVolumeGroupMetadata(t.Context(), "vg0", BackupVolumeGroupMetadataOptions{File: "/tmp/b"}))
+	require.NoError(t, client.BackupVolumeGroupMetadata(t.Context(), "", BackupVolumeGroupMetadataOptions{}))
+	require.NoError(t, client.RestoreVolumeGroupMetadata(t.Context(), "vg0", RestoreVolumeGroupMetadataOptions{File: "/tmp/b", Force: true}))
+
+	assert.Equal(t, []string{"vgcfgbackup", "-f", "/tmp/b", "vg0"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"vgcfgbackup"}, fake.calls[1].Args())
+	assert.Equal(t, []string{"vgcfgrestore", "-f", "/tmp/b", "--force", "vg0"}, fake.calls[2].Args())
+}
+
+func TestListMetadataBackupsBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{output: []byte("backup list\n")}
+	client := New(WithRunner(fake))
+
+	output, err := client.ListVolumeGroupMetadataBackups(t.Context(), "vg0", ListVolumeGroupMetadataBackupsOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "backup list\n", output)
+	assert.Equal(t, []string{"vgcfgrestore", "-l", "vg0"}, fake.calls[0].Args())
+}
+
+func TestExportImportBuildCommands(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.ExportVolumeGroup(t.Context(), Name("vg0"), ExportVolumeGroupOptions{}))
+	require.NoError(t, client.ExportVolumeGroup(t.Context(), All, ExportVolumeGroupOptions{}))
+	require.NoError(t, client.ImportVolumeGroup(t.Context(), Select("vg_tags = {x}"), ImportVolumeGroupOptions{}))
+
+	assert.Equal(t, []string{"vgexport", "vg0"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"vgexport", "-a"}, fake.calls[1].Args())
+	assert.Equal(t, []string{"vgimport", "-S", "vg_tags = {x}"}, fake.calls[2].Args())
+}
+
+func TestMergeVolumeGroupsBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.MergeVolumeGroups(t.Context(), "vg0", "vg1", MergeVolumeGroupsOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"vgmerge", "vg0", "vg1"}, fake.calls[0].Args())
+}
+
+func TestSplitVolumeGroupForms(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.SplitVolumeGroup(t.Context(), "vg0", "vg1", []Device{"/dev/loop1"}, SplitVolumeGroupOptions{}))
+	require.NoError(t, client.SplitVolumeGroup(t.Context(), "vg0", "vg1", nil, SplitVolumeGroupOptions{LVName: "lv0"}))
+
+	assert.Equal(t, []string{"vgsplit", "vg0", "vg1", "/dev/loop1"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"vgsplit", "-n", "lv0", "vg0", "vg1"}, fake.calls[1].Args())
+}
+
+func TestSplitVolumeGroupRequiresExactlyOneForm(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.SplitVolumeGroup(t.Context(), "vg0", "vg1", nil, SplitVolumeGroupOptions{})
+	assert.ErrorContains(t, err, "exactly one")
+
+	err = client.SplitVolumeGroup(t.Context(), "vg0", "vg1", []Device{"/dev/loop1"}, SplitVolumeGroupOptions{LVName: "lv0"})
+	assert.ErrorContains(t, err, "exactly one")
+	assert.Empty(t, fake.calls)
+}
+
+func TestMakeVolumeGroupNodesBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.MakeVolumeGroupNodes(t.Context(), "vg0", MakeVolumeGroupNodesOptions{}))
+	require.NoError(t, client.MakeVolumeGroupNodes(t.Context(), "", MakeVolumeGroupNodesOptions{}))
+
+	assert.Equal(t, []string{"vgmknodes", "vg0"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"vgmknodes"}, fake.calls[1].Args())
+}
+
+func TestImportClonedVolumeGroupBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ImportClonedVolumeGroup(t.Context(), []Device{"/dev/loop1"}, ImportClonedVolumeGroupOptions{
+		BaseName: "vg0-clone",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"vgimportclone", "-n", "vg0-clone", "/dev/loop1"}, fake.calls[0].Args())
+}
+
+func TestImportVolumeGroupDevicesBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ImportVolumeGroupDevices(t.Context(), Name("vg0"), ImportVolumeGroupDevicesOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"vgimportdevices", "vg0"}, fake.calls[0].Args())
+}
