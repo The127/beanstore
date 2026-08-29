@@ -388,3 +388,114 @@ func (c *Client) DeactivateLogicalVolume(ctx context.Context, target Selector, o
 
 	return nil
 }
+
+// ExtendLogicalVolumeOptions configures ExtendLogicalVolume.
+type ExtendLogicalVolumeOptions struct {
+	CommonOptions
+	// Relative grows by the given size instead of to it.
+	Relative bool
+	// ResizeFilesystem also grows the filesystem on the lv.
+	ResizeFilesystem bool
+	// PoolMetadataSizeBytes also grows a thin pool's metadata lv to the
+	// given size.
+	PoolMetadataSizeBytes uint64
+}
+
+// ExtendLogicalVolume grows the given vg/lv to or by the given size.
+func (c *Client) ExtendLogicalVolume(ctx context.Context, name string, sizeBytes uint64, opts ExtendLogicalVolumeOptions) error {
+	size := strconv.FormatUint(sizeBytes, 10) + "b"
+	if opts.Relative {
+		size = "+" + size
+	}
+
+	cmd := c.metadataCommand("lvextend", opts.CommonOptions).Append("-L", size)
+	if opts.ResizeFilesystem {
+		cmd = cmd.Append("-r")
+	}
+	if opts.PoolMetadataSizeBytes > 0 {
+		cmd = cmd.Append("--poolmetadatasize", strconv.FormatUint(opts.PoolMetadataSizeBytes, 10)+"b")
+	}
+	cmd = cmd.Append(name)
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("extending logical volume %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// ReduceLogicalVolumeOptions configures ReduceLogicalVolume.
+type ReduceLogicalVolumeOptions struct {
+	CommonOptions
+	// Relative shrinks by the given size instead of to it.
+	Relative bool
+	// ResizeFilesystem also shrinks the filesystem on the lv first.
+	ResizeFilesystem bool
+}
+
+// ReduceLogicalVolume shrinks the given vg/lv to or by the given size,
+// destroying data beyond the new end. The confirmation lvm asks for is
+// answered, calling this already expresses the intent.
+func (c *Client) ReduceLogicalVolume(ctx context.Context, name string, sizeBytes uint64, opts ReduceLogicalVolumeOptions) error {
+	size := strconv.FormatUint(sizeBytes, 10) + "b"
+	if opts.Relative {
+		size = "-" + size
+	}
+
+	cmd := c.metadataCommand("lvreduce", opts.CommonOptions).Append("-L", size, "-f")
+	if opts.ResizeFilesystem {
+		cmd = cmd.Append("-r")
+	}
+	cmd = cmd.Append(name)
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("reducing logical volume %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// ResizeLogicalVolumeOptions configures ResizeLogicalVolume.
+type ResizeLogicalVolumeOptions struct {
+	CommonOptions
+	// ResizeFilesystem also resizes the filesystem on the lv.
+	ResizeFilesystem bool
+}
+
+// ResizeLogicalVolume resizes the given vg/lv to the given absolute
+// size. Shrinking prompts and fails, use ReduceLogicalVolume to shrink.
+func (c *Client) ResizeLogicalVolume(ctx context.Context, name string, sizeBytes uint64, opts ResizeLogicalVolumeOptions) error {
+	cmd := c.metadataCommand("lvresize", opts.CommonOptions).Append(
+		"-L", strconv.FormatUint(sizeBytes, 10)+"b",
+	)
+	if opts.ResizeFilesystem {
+		cmd = cmd.Append("-r")
+	}
+	cmd = cmd.Append(name)
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("resizing logical volume %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// RenameLogicalVolumeOptions configures RenameLogicalVolume.
+type RenameLogicalVolumeOptions struct {
+	CommonOptions
+}
+
+// RenameLogicalVolume renames an lv within its vg.
+func (c *Client) RenameLogicalVolume(ctx context.Context, vg, oldName, newName string, opts RenameLogicalVolumeOptions) error {
+	cmd := c.metadataCommand("lvrename", opts.CommonOptions).Append(vg, oldName, newName)
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("renaming logical volume %s/%s to %s: %w", vg, oldName, newName, err)
+	}
+
+	return nil
+}

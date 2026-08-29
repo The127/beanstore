@@ -183,3 +183,59 @@ func TestActivateAndDeactivateLogicalVolumeBuildCommands(t *testing.T) {
 	assert.Equal(t, []string{"lvchange", "-a", "y", "-K", "vg0/vol1"}, fake.calls[0].Args())
 	assert.Equal(t, []string{"lvchange", "-a", "n", "-S", "lv_tags = {beanstore}"}, fake.calls[1].Args())
 }
+
+func TestExtendLogicalVolumeBuildsCommands(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.ExtendLogicalVolume(t.Context(), "vg0/vol1", 128<<20, ExtendLogicalVolumeOptions{}))
+	require.NoError(t, client.ExtendLogicalVolume(t.Context(), "vg0/vol1", 32<<20, ExtendLogicalVolumeOptions{
+		Relative:              true,
+		ResizeFilesystem:      true,
+		PoolMetadataSizeBytes: 8 << 20,
+	}))
+
+	assert.Equal(t, []string{"lvextend", "-L", "134217728b", "vg0/vol1"}, fake.calls[0].Args())
+	assert.Equal(t, []string{
+		"lvextend",
+		"-L", "+33554432b",
+		"-r",
+		"--poolmetadatasize", "8388608b",
+		"vg0/vol1",
+	}, fake.calls[1].Args())
+}
+
+func TestReduceLogicalVolumeBuildsCommands(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.ReduceLogicalVolume(t.Context(), "vg0/vol1", 64<<20, ReduceLogicalVolumeOptions{}))
+	require.NoError(t, client.ReduceLogicalVolume(t.Context(), "vg0/vol1", 16<<20, ReduceLogicalVolumeOptions{
+		Relative: true,
+	}))
+
+	assert.Equal(t, []string{"lvreduce", "-L", "67108864b", "-f", "vg0/vol1"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"lvreduce", "-L", "-16777216b", "-f", "vg0/vol1"}, fake.calls[1].Args())
+}
+
+func TestResizeLogicalVolumeBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ResizeLogicalVolume(t.Context(), "vg0/vol1", 256<<20, ResizeLogicalVolumeOptions{
+		ResizeFilesystem: true,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"lvresize", "-L", "268435456b", "-r", "vg0/vol1"}, fake.calls[0].Args())
+}
+
+func TestRenameLogicalVolumeBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.RenameLogicalVolume(t.Context(), "vg0", "vol1", "vol2", RenameLogicalVolumeOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"lvrename", "vg0", "vol1", "vol2"}, fake.calls[0].Args())
+}

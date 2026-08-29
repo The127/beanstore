@@ -659,3 +659,39 @@ func TestIntegrationLinearVolumeLifecycle(t *testing.T) {
 
 	require.NoError(t, client.RemoveLogicalVolume(ctx, Name(vg+"/lv0"), RemoveLogicalVolumeOptions{Force: true}))
 }
+
+func TestIntegrationLogicalVolumeResizeAndRename(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	vg := vgFor(t, loop)
+
+	require.NoError(t, client.CreateThinPool(ctx, vg, "pool0", 256<<20, CreateThinPoolOptions{}))
+	require.NoError(t, client.CreateThinVolume(ctx, vg, "pool0", "vol1", 64<<20, CreateThinVolumeOptions{}))
+
+	require.NoError(t, client.ExtendLogicalVolume(ctx, vg+"/vol1", 32<<20, ExtendLogicalVolumeOptions{Relative: true}))
+	assert.Equal(t, uint64(96<<20), lvByName(t, client, vg, "vol1").SizeBytes)
+
+	require.NoError(t, client.ResizeLogicalVolume(ctx, vg+"/vol1", 128<<20, ResizeLogicalVolumeOptions{}))
+	assert.Equal(t, uint64(128<<20), lvByName(t, client, vg, "vol1").SizeBytes)
+
+	require.NoError(t, client.ReduceLogicalVolume(ctx, vg+"/vol1", 64<<20, ReduceLogicalVolumeOptions{}))
+	assert.Equal(t, uint64(64<<20), lvByName(t, client, vg, "vol1").SizeBytes)
+
+	require.NoError(t, client.RenameLogicalVolume(ctx, vg, "vol1", "vol2", RenameLogicalVolumeOptions{}))
+	assert.Equal(t, uint64(64<<20), lvByName(t, client, vg, "vol2").SizeBytes)
+}
+
+func lvByName(t *testing.T, client *Client, vg, name string) LogicalVolume {
+	t.Helper()
+
+	lvs, err := client.ListLogicalVolumes(t.Context(), ListLogicalVolumesOptions{
+		VG:     vg,
+		Select: Select("lv_name = " + name),
+	})
+	require.NoError(t, err)
+	require.Len(t, lvs, 1)
+	return lvs[0]
+}

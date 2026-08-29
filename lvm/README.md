@@ -48,6 +48,10 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `ChangeLogicalVolume` | `lvchange` |
 | `ActivateLogicalVolume` | `lvchange -a y` |
 | `DeactivateLogicalVolume` | `lvchange -a n` |
+| `ExtendLogicalVolume` | `lvextend` |
+| `ReduceLogicalVolume` | `lvreduce` |
+| `ResizeLogicalVolume` | `lvresize` |
+| `RenameLogicalVolume` | `lvrename` |
 
 Every operation takes an options struct. Its fields cover the command's
 flags, and the embedded `CommonOptions` override the client environment
