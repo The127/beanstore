@@ -31,6 +31,20 @@ short: commits follow plain Conventional Commits (`type: description`, no
 scopes) and must be DCO signed off (`git commit -s`). Both rules are
 enforced by git hooks.
 
+## AI-assisted contributions
+
+AI-assisted contributions are welcome — this project itself is developed
+with AI in the loop. Three rules:
+
+- **Disclose it.** Commits with AI-generated code carry a co-author
+  trailer, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>`.
+- **You are the author.** The contributor is fully responsible for
+  AI-generated code — its correctness, its license compatibility, and the
+  DCO sign-off certifying the right to submit it. "The AI wrote it" is
+  never an excuse.
+- **Review it yourself, before pushing.** Submit only code you have read,
+  understood, and could explain and defend in review as your own.
+
 ## Development setup
 
 Required tooling:
