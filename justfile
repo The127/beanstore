@@ -33,6 +33,15 @@ fmt:
     golangci-lint fmt ./...
     cd client && golangci-lint fmt ./...
 
+# check prose style: no em-dashes outside the license files
+prose:
+    #!/usr/bin/env bash
+    emdash=$(printf '\342\200\224')
+    if git grep -n "$emdash" -- ':!LICENSE' ':!client/LICENSE'; then
+        echo "em-dashes found, replace them (see CLAUDE.md prose rules)"
+        exit 1
+    fi
+
 # check for known vulnerabilities in reachable code
 vuln:
     go run golang.org/x/vuln/cmd/govulncheck@latest ./...
@@ -47,4 +56,4 @@ hooks:
     lefthook install
 
 # everything that must pass before a push
-ci: lint build test vuln
+ci: lint prose build test vuln

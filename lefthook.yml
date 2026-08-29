@@ -6,6 +6,8 @@ pre-commit:
     - name: lint client
       root: client/
       run: just lint-client
+    - name: prose check
+      run: just prose
 
 commit-msg:
   jobs:
