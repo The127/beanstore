@@ -50,9 +50,9 @@ func TestListPhysicalVolumesBuildsCommandAndParses(t *testing.T) {
 	fake := &fakeRunner{output: []byte(`{
 		"report": [{"pv": [
 			{"pv_name": "/dev/loop0", "vg_name": "", "pv_size": "1073741824",
-			 "pv_free": "1073741824", "pv_attr": "---", "pv_tags": []},
+			 "pv_free": "1073741824", "pv_attr": "---", "pv_tags": ""},
 			{"pv_name": "/dev/sda2", "vg_name": "vg0", "pv_size": "512110190592",
-			 "pv_free": "10737418240", "pv_attr": "a--", "pv_tags": ["fast", "ssd"]}
+			 "pv_free": "10737418240", "pv_attr": "a--", "pv_tags": "fast,ssd"}
 		]}], "log": []}`)}
 	client := New(WithRunner(fake))
 
@@ -61,7 +61,7 @@ func TestListPhysicalVolumesBuildsCommandAndParses(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"pvs",
-		"--reportformat", "json_std",
+		"--reportformat", "json",
 		"--units", "b",
 		"--nosuffix",
 		"-o", "pv_name,vg_name,pv_size,pv_free,pv_attr,pv_tags",
@@ -74,7 +74,7 @@ func TestListPhysicalVolumesBuildsCommandAndParses(t *testing.T) {
 		SizeBytes:   1073741824,
 		FreeBytes:   1073741824,
 		Attributes:  "---",
-		Tags:        []string{},
+		Tags:        nil,
 	}, pvs[0])
 	assert.Equal(t, []string{"fast", "ssd"}, pvs[1].Tags)
 	assert.Equal(t, "vg0", pvs[1].VolumeGroup)

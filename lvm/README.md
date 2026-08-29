@@ -2,7 +2,7 @@
 
 Go client for lvm2, wrapping the `lvm` command line, which is the stable
 programmatic interface since lvm2 removed liblvm2app. Requires lvm2
-2.03.10 or newer for json_std reports. MIT licensed, part of the
+2.02.158 (2016) or newer for json reports. MIT licensed, part of the
 [beanstore](https://github.com/The127/beanstore) repository.
 
 ## Supported operations

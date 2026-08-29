@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // PhysicalVolume is one pv as reported by pvs.
@@ -34,7 +35,7 @@ func (c *Client) CreatePhysicalVolume(ctx context.Context, device string) error 
 // ListPhysicalVolumes reports all pvs visible to the client.
 func (c *Client) ListPhysicalVolumes(ctx context.Context) ([]PhysicalVolume, error) {
 	cmd := c.command("pvs").Append(
-		"--reportformat", "json_std",
+		"--reportformat", "json",
 		"--units", "b",
 		"--nosuffix",
 		"-o", "pv_name,vg_name,pv_size,pv_free,pv_attr,pv_tags",
@@ -63,12 +64,12 @@ func (c *Client) RemovePhysicalVolume(ctx context.Context, device string) error 
 type pvReport struct {
 	Report []struct {
 		PV []struct {
-			Name string   `json:"pv_name"`
-			VG   string   `json:"vg_name"`
-			Size string   `json:"pv_size"`
-			Free string   `json:"pv_free"`
-			Attr string   `json:"pv_attr"`
-			Tags []string `json:"pv_tags"`
+			Name string `json:"pv_name"`
+			VG   string `json:"vg_name"`
+			Size string `json:"pv_size"`
+			Free string `json:"pv_free"`
+			Attr string `json:"pv_attr"`
+			Tags string `json:"pv_tags"`
 		} `json:"pv"`
 	} `json:"report"`
 }
@@ -93,13 +94,19 @@ func parsePVReport(output []byte) ([]PhysicalVolume, error) {
 				return nil, fmt.Errorf("parsing free space of %s: %w", pv.Name, err)
 			}
 
+			// tags may not contain commas, splitting is unambiguous
+			var tags []string
+			if pv.Tags != "" {
+				tags = strings.Split(pv.Tags, ",")
+			}
+
 			volumes = append(volumes, PhysicalVolume{
 				Device:      pv.Name,
 				VolumeGroup: pv.VG,
 				SizeBytes:   size,
 				FreeBytes:   free,
 				Attributes:  pv.Attr,
-				Tags:        pv.Tags,
+				Tags:        tags,
 			})
 		}
 	}
