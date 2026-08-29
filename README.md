@@ -38,8 +38,7 @@ enforced by git hooks.
 
 ## AI-assisted contributions
 
-AI-assisted contributions are welcome. This project itself is developed
-with AI in the loop. Three rules:
+AI-assisted contributions need to follow these rules:
 
 - **Disclose it.** Commits with AI-generated code carry a co-author
   trailer, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>`.
