@@ -39,10 +39,10 @@ CONTRIBUTING for the contributor-facing policy):
 
 ## Licensing boundary
 
-The server (repo root module) is AGPL-3.0, `client/` is a separate
-MIT-licensed Go module holding the protos, generated stubs, and error
-taxonomy. The server may import the client module, never the reverse. New
-API surface goes on the MIT side.
+The server (repo root module) is AGPL-3.0. Two separate MIT-licensed Go
+modules exist for consumers: `client/` (protos, generated stubs, error
+taxonomy) and `lvm/` (the Go lvm2 library). The server may import the MIT
+modules, never the reverse. New wire API surface goes into `client/`.
 
 ## Personal extensions
 

@@ -9,6 +9,23 @@ permissions:
   contents: read
 
 jobs:
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: install lvm2
+        run: sudo apt-get update && sudo apt-get install -y lvm2
+
+      - name: lvm integration tests
+        working-directory: lvm
+        run: go test -tags integration -run TestIntegration -v ./...
+
   ci:
     name: ci
     runs-on: ubuntu-latest
@@ -29,6 +46,12 @@ jobs:
         with:
           version: v2.11.4
           working-directory: client
+
+      - name: lint lvm
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11.4
+          working-directory: lvm
 
       - name: proto lint
         uses: bufbuild/buf-action@v1
@@ -57,6 +80,10 @@ jobs:
         working-directory: client
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
+      - name: govulncheck lvm
+        working-directory: lvm
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
       - name: build and test server
         run: |
           go build ./...
@@ -64,6 +91,12 @@ jobs:
 
       - name: build and test client
         working-directory: client
+        run: |
+          go build ./...
+          go test -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: build and test lvm
+        working-directory: lvm
         run: |
           go build ./...
           go test -coverprofile=coverage.out -covermode=atomic ./...

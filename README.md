@@ -4,6 +4,7 @@
 [![coverage](https://codecov.io/gh/The127/beanstore/graph/badge.svg)](https://app.codecov.io/gh/The127/beanstore)
 [![server license: AGPL-3.0](https://img.shields.io/badge/server-AGPL--3.0-blue)](LICENSE)
 [![client license: MIT](https://img.shields.io/badge/client-MIT-green)](client/LICENSE)
+[![lvm license: MIT](https://img.shields.io/badge/lvm-MIT-green)](lvm/LICENSE)
 
 An LVM-based per-node storage API. beanstore manages thin logical volumes on
 the node it runs on and moves detached volumes between nodes. Nothing more.
@@ -81,3 +82,6 @@ just setup
   under [MIT](client/LICENSE), so consumers can link it without copyleft
   obligations. Talking to a beanstore daemon over the wire carries no
   license obligations either way.
+- The Go lvm2 library in [`lvm/`](lvm/) is likewise a separate module
+  licensed under [MIT](lvm/LICENSE), usable on its own by any project
+  that needs to talk to lvm2 from Go.

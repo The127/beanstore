@@ -6,19 +6,22 @@ default:
 build:
     go build ./...
     cd client && go build ./...
+    cd lvm && go build ./...
 
 # test all modules
 test:
     go test ./...
     cd client && go test ./...
+    cd lvm && go test ./...
 
 # test all modules with coverage profiles
 cover:
     go test -coverprofile=coverage.out -covermode=atomic ./...
     cd client && go test -coverprofile=coverage.out -covermode=atomic ./...
+    cd lvm && go test -coverprofile=coverage.out -covermode=atomic ./...
 
 # lint all modules
-lint: lint-server lint-client
+lint: lint-server lint-client lint-lvm
 
 # lint the server module
 lint-server:
@@ -28,10 +31,15 @@ lint-server:
 lint-client:
     cd client && golangci-lint run ./...
 
+# lint the lvm module
+lint-lvm:
+    cd lvm && golangci-lint run ./...
+
 # format all modules
 fmt:
     golangci-lint fmt ./...
     cd client && golangci-lint fmt ./...
+    cd lvm && golangci-lint fmt ./...
 
 # regenerate grpc code from the protos
 proto:
@@ -54,14 +62,20 @@ prose:
         exit 1
     fi
 
+# run the lvm integration tests against a loop device vg (needs sudo)
+test-integration:
+    sudo -v
+    cd lvm && go test -tags integration -run TestIntegration -count=1 -v ./...
+
 # check for known vulnerabilities in reachable code
 vuln:
     go run golang.org/x/vuln/cmd/govulncheck@latest ./...
     cd client && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+    cd lvm && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 # one-time dev setup after cloning: local go workspace + git hooks
 setup: hooks
-    test -f go.work || go work init . ./client
+    test -f go.work || go work init . ./client ./lvm
 
 # install the git hooks
 hooks:
