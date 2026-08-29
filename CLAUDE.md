@@ -4,9 +4,6 @@ LVM-based per-node storage API (thin LVs, detached-only moves, no internal
 coordinator). Standalone tool, not part of any orchestrator. No
 orchestrator types or assumptions in the API.
 
-The contract lives at `docs/CONTRACT.md`. Code conforms to the contract,
-not the other way around.
-
 ## Working agreements
 
 - Commit messages follow plain Conventional Commits: `type: description`

@@ -135,8 +135,6 @@ fabric.properties
 # End of https://www.toptal.com/developers/gitignore/api/go,goland+all,visualstudiocode
 
 ### Project ###
-# design docs, kept out of the repo for now
-docs/
 # compiled binary
 /beanstore
 # Claude Code personal extension
