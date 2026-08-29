@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	"github.com/knadh/koanf/parsers/yaml"
@@ -20,11 +21,31 @@ const envPrefix = "BEANSTORE_"
 type Config struct {
 	ListenAddress string
 	LogLevel      slog.Level
+	// VolumeGroup is the vg holding the daemon's thin pool.
+	VolumeGroup string
+	// ThinPool is the thin pool all volumes live in.
+	ThinPool string
+	// CreatePool makes the daemon create a missing thin pool at
+	// startup instead of refusing to start.
+	CreatePool bool
+	// PoolSize is the size of a pool created at startup.
+	PoolSize PoolSize
+}
+
+// PoolSize is a thin pool bootstrap size: a byte count, or a
+// percentage of the vg's free space when Percent is set.
+type PoolSize struct {
+	Bytes   uint64
+	Percent uint64
 }
 
 type rawConfig struct {
 	ListenAddress string `koanf:"listen_address"`
 	LogLevel      string `koanf:"log_level"`
+	VolumeGroup   string `koanf:"volume_group"`
+	ThinPool      string `koanf:"thin_pool"`
+	CreatePool    bool   `koanf:"create_pool"`
+	PoolSize      string `koanf:"pool_size"`
 }
 
 var defaults = map[string]any{
@@ -79,10 +100,71 @@ func validate(raw rawConfig) (Config, error) {
 		return Config{}, err
 	}
 
+	if raw.VolumeGroup == "" {
+		return Config{}, errors.New("volume_group must be set")
+	}
+	if raw.ThinPool == "" {
+		return Config{}, errors.New("thin_pool must be set")
+	}
+
+	var poolSize PoolSize
+	if raw.CreatePool {
+		poolSize, err = parsePoolSize(raw.PoolSize)
+		if err != nil {
+			return Config{}, err
+		}
+	} else if raw.PoolSize != "" {
+		return Config{}, errors.New("pool_size requires create_pool")
+	}
+
 	return Config{
 		ListenAddress: raw.ListenAddress,
 		LogLevel:      level,
+		VolumeGroup:   raw.VolumeGroup,
+		ThinPool:      raw.ThinPool,
+		CreatePool:    raw.CreatePool,
+		PoolSize:      poolSize,
 	}, nil
+}
+
+// parsePoolSize parses a byte count with an optional K, M, G or T
+// binary suffix, or a percentage of the vg's free space like "90%".
+func parsePoolSize(value string) (PoolSize, error) {
+	if value == "" {
+		return PoolSize{}, errors.New("create_pool requires pool_size")
+	}
+
+	if strings.HasSuffix(value, "%") {
+		percent, err := strconv.ParseUint(strings.TrimSuffix(value, "%"), 10, 64)
+		if err != nil || percent == 0 || percent > 100 {
+			return PoolSize{}, fmt.Errorf("pool_size percentage must be 1-100: %q", value)
+		}
+
+		return PoolSize{Percent: percent}, nil
+	}
+
+	multiplier := uint64(1)
+	number := value
+	switch {
+	case strings.HasSuffix(value, "K"):
+		multiplier, number = 1<<10, strings.TrimSuffix(value, "K")
+
+	case strings.HasSuffix(value, "M"):
+		multiplier, number = 1<<20, strings.TrimSuffix(value, "M")
+
+	case strings.HasSuffix(value, "G"):
+		multiplier, number = 1<<30, strings.TrimSuffix(value, "G")
+
+	case strings.HasSuffix(value, "T"):
+		multiplier, number = 1<<40, strings.TrimSuffix(value, "T")
+	}
+
+	bytes, err := strconv.ParseUint(number, 10, 64)
+	if err != nil || bytes == 0 {
+		return PoolSize{}, fmt.Errorf("pool_size must be bytes with an optional K, M, G or T suffix, or a percentage: %q", value)
+	}
+
+	return PoolSize{Bytes: bytes * multiplier}, nil
 }
 
 func parseLevel(name string) (slog.Level, error) {
