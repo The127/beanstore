@@ -37,7 +37,7 @@ func sudoRun(ctx context.Context, args ...string) ([]byte, error) {
 
 // loopDevice creates a loop device over a sparse file and removes it
 // again after the test.
-func loopDevice(t *testing.T) string {
+func loopDevice(t *testing.T) Device {
 	t.Helper()
 
 	ctx := t.Context()
@@ -53,10 +53,10 @@ func loopDevice(t *testing.T) string {
 
 	loopOut, err := sudoRun(ctx, "losetup", "--find", "--show", backing)
 	require.NoError(t, err)
-	loop := strings.TrimSpace(string(loopOut))
+	loop := Device(strings.TrimSpace(string(loopOut)))
 	t.Cleanup(func() {
 		//nolint:usetesting // t.Context is done during cleanup
-		_, _ = sudoRun(context.Background(), "losetup", "-d", loop)
+		_, _ = sudoRun(context.Background(), "losetup", "-d", string(loop))
 	})
 
 	return loop
@@ -99,13 +99,17 @@ func TestIntegrationCreateOnMissingDeviceFails(t *testing.T) {
 
 // vgFor wraps the loop devices in a vg through raw commands until the
 // vg family is wrapped.
-func vgFor(t *testing.T, loops ...string) string {
+func vgFor(t *testing.T, loops ...Device) string {
 	t.Helper()
 
-	devices := strings.Join(loops, ",")
+	paths := make([]string, len(loops))
+	for i, loop := range loops {
+		paths[i] = string(loop)
+	}
+	devices := strings.Join(paths, ",")
 	vg := fmt.Sprintf("beanstore-test-%d", os.Getpid())
 
-	args := append([]string{"lvm", "vgcreate", "--devices", devices, vg}, loops...)
+	args := append([]string{"lvm", "vgcreate", "--devices", devices, vg}, paths...)
 	_, err := sudoRun(t.Context(), args...)
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -173,7 +177,7 @@ func TestIntegrationPhysicalVolumeResize(t *testing.T) {
 
 	backing := backingFileOf(t, loop)
 	require.NoError(t, os.Truncate(backing, 2<<30))
-	_, err = sudoRun(ctx, "losetup", "-c", loop)
+	_, err = sudoRun(ctx, "losetup", "-c", string(loop))
 	require.NoError(t, err)
 
 	require.NoError(t, client.ResizePhysicalVolume(ctx, loop, ResizePhysicalVolumeOptions{}))
@@ -183,10 +187,10 @@ func TestIntegrationPhysicalVolumeResize(t *testing.T) {
 	assert.Greater(t, pvs[0].SizeBytes, sizeBefore)
 }
 
-func backingFileOf(t *testing.T, loop string) string {
+func backingFileOf(t *testing.T, loop Device) string {
 	t.Helper()
 
-	output, err := sudoRun(t.Context(), "losetup", "--noheadings", "--output", "BACK-FILE", loop)
+	output, err := sudoRun(t.Context(), "losetup", "--noheadings", "--output", "BACK-FILE", string(loop))
 	require.NoError(t, err)
 	return strings.TrimSpace(string(output))
 }
@@ -216,7 +220,7 @@ func TestIntegrationMetadataIgnoreRoundTrip(t *testing.T) {
 	// needs a second pv keeping one
 	first := loopDevice(t)
 	second := loopDevice(t)
-	devices := first + "," + second
+	devices := string(first) + "," + string(second)
 	client := New(WithRunner(sudoRunner{}), WithDevices(first, second))
 	ctx := t.Context()
 
@@ -226,13 +230,13 @@ func TestIntegrationMetadataIgnoreRoundTrip(t *testing.T) {
 
 	require.NoError(t, client.ChangePhysicalVolume(ctx, first, ChangePhysicalVolumeOptions{MetadataIgnore: Bool(true)}))
 
-	output, err := sudoRun(ctx, "lvm", "pvs", "--devices", devices, "--noheadings", "-o", "pv_mda_used_count", first)
+	output, err := sudoRun(ctx, "lvm", "pvs", "--devices", devices, "--noheadings", "-o", "pv_mda_used_count", string(first))
 	require.NoError(t, err)
 	assert.Equal(t, "0", strings.TrimSpace(string(output)))
 
 	require.NoError(t, client.ChangePhysicalVolume(ctx, first, ChangePhysicalVolumeOptions{MetadataIgnore: Bool(false)}))
 
-	output, err = sudoRun(ctx, "lvm", "pvs", "--devices", devices, "--noheadings", "-o", "pv_mda_used_count", first)
+	output, err = sudoRun(ctx, "lvm", "pvs", "--devices", devices, "--noheadings", "-o", "pv_mda_used_count", string(first))
 	require.NoError(t, err)
 	assert.Equal(t, "1", strings.TrimSpace(string(output)))
 }
@@ -249,4 +253,36 @@ func TestIntegrationResizeToShrinksOrphanPV(t *testing.T) {
 	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	assert.LessOrEqual(t, pvs[0].SizeBytes, uint64(512<<20))
+}
+
+func TestIntegrationSelectTargetsMatchingPVs(t *testing.T) {
+	first := loopDevice(t)
+	second := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(first, second))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, first, CreatePhysicalVolumeOptions{}))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, second, CreatePhysicalVolumeOptions{}))
+	vgFor(t, first, second)
+
+	require.NoError(t, client.ChangePhysicalVolume(ctx, first, ChangePhysicalVolumeOptions{
+		AddTags: []string{"fast"},
+	}))
+
+	require.NoError(t, client.ChangePhysicalVolume(ctx, Select("pv_tags = @fast"), ChangePhysicalVolumeOptions{
+		AddTags: []string{"chosen"},
+	}))
+
+	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{Select: "pv_tags = @chosen"})
+	require.NoError(t, err)
+	require.Len(t, pvs, 1)
+	assert.Equal(t, first, pvs[0].Device)
+
+	require.NoError(t, client.ChangePhysicalVolume(ctx, All, ChangePhysicalVolumeOptions{
+		AddTags: []string{"everywhere"},
+	}))
+
+	pvs, err = client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{Select: "pv_tags = @everywhere"})
+	require.NoError(t, err)
+	assert.Len(t, pvs, 2)
 }

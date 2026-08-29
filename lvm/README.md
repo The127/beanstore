@@ -19,6 +19,19 @@ Every operation takes an options struct. Its fields cover the command's
 flags, and the embedded `CommonOptions` override the client environment
 (device scoping, autobackup) for one call.
 
+Change operations address their targets through a selector:
+`lvm.Device`, `lvm.Select` criteria (see lvmreport(7)), or `lvm.All`.
+List operations filter with the `Select` options field instead:
+
+```go
+err := client.ChangePhysicalVolume(ctx, lvm.Select("pv_tags = @retiring"),
+	lvm.ChangePhysicalVolumeOptions{AddTags: []string{"drained"}})
+
+pvs, err := client.ListPhysicalVolumes(ctx, lvm.ListPhysicalVolumesOptions{
+	Select: "pv_free > 100g",
+})
+```
+
 ## Usage
 
 ```go
@@ -29,7 +42,7 @@ if err != nil {
 	return err
 }
 
-err = client.ChangePhysicalVolume(ctx, "/dev/sdb", lvm.ChangePhysicalVolumeOptions{
+err = client.ChangePhysicalVolume(ctx, lvm.Device("/dev/sdb"), lvm.ChangePhysicalVolumeOptions{
 	AddTags:     []string{"ssd"},
 	Allocatable: lvm.Bool(true),
 })

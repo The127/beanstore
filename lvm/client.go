@@ -2,6 +2,7 @@ package lvm
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	runner "github.com/The127/go-runner"
@@ -11,7 +12,7 @@ import (
 // set environment defaults, CommonOptions on a call override them.
 type Client struct {
 	runner     runner.Runner
-	devices    []string
+	devices    []Device
 	autobackup *bool
 }
 
@@ -28,7 +29,7 @@ func WithRunner(r runner.Runner) Option {
 // WithDevices restricts every command to the given devices, bypassing
 // the system devices file. Needed to address devices the host lvm does
 // not track, such as test loop devices.
-func WithDevices(devices ...string) Option {
+func WithDevices(devices ...Device) Option {
 	return func(c *Client) {
 		c.devices = devices
 	}
@@ -58,6 +59,22 @@ func New(opts ...Option) *Client {
 
 var errAutobackupNotSupported = errors.New("this operation does not change metadata and does not support Autobackup")
 
+func appendSelector(cmd *runner.Cmd, target Selector) (*runner.Cmd, error) {
+	switch t := target.(type) {
+	case Device:
+		return cmd.Append(string(t)), nil
+
+	case Select:
+		return cmd.Append("-S", string(t)), nil
+
+	case allSelector:
+		return cmd.Append("-a"), nil
+
+	default:
+		return nil, fmt.Errorf("nil selector, want Device, Select or All")
+	}
+}
+
 func (c *Client) command(subcommand string, common CommonOptions) *runner.Cmd {
 	devices := common.Devices
 	if devices == nil {
@@ -66,7 +83,11 @@ func (c *Client) command(subcommand string, common CommonOptions) *runner.Cmd {
 
 	cmd := runner.Command("lvm", subcommand)
 	if len(devices) > 0 {
-		cmd = cmd.Append("--devices", strings.Join(devices, ","))
+		paths := make([]string, len(devices))
+		for i, device := range devices {
+			paths[i] = string(device)
+		}
+		cmd = cmd.Append("--devices", strings.Join(paths, ","))
 	}
 
 	return cmd

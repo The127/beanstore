@@ -11,7 +11,7 @@ import (
 
 // PhysicalVolume is one pv as reported by pvs.
 type PhysicalVolume struct {
-	Device      string
+	Device      Device
 	UUID        string
 	VolumeGroup string
 	SizeBytes   uint64
@@ -31,7 +31,7 @@ type CreatePhysicalVolumeOptions struct {
 // CreatePhysicalVolume initializes the given device for use by lvm.
 // Without Force, devices carrying a recognizable signature are refused,
 // lvm's prompt fails on the runner's closed stdin.
-func (c *Client) CreatePhysicalVolume(ctx context.Context, device string, opts CreatePhysicalVolumeOptions) error {
+func (c *Client) CreatePhysicalVolume(ctx context.Context, device Device, opts CreatePhysicalVolumeOptions) error {
 	if opts.Autobackup != nil {
 		return errAutobackupNotSupported
 	}
@@ -40,7 +40,7 @@ func (c *Client) CreatePhysicalVolume(ctx context.Context, device string, opts C
 	if opts.Force {
 		cmd = cmd.Append("-f")
 	}
-	cmd = cmd.Append(device)
+	cmd = cmd.Append(string(device))
 
 	_, err := c.runner.Run(ctx, cmd)
 	if err != nil {
@@ -53,6 +53,8 @@ func (c *Client) CreatePhysicalVolume(ctx context.Context, device string, opts C
 // ListPhysicalVolumesOptions configures ListPhysicalVolumes.
 type ListPhysicalVolumesOptions struct {
 	CommonOptions
+	// Select filters the report by lvm selection criteria.
+	Select Select
 }
 
 // ListPhysicalVolumes reports all pvs visible to the client.
@@ -67,6 +69,9 @@ func (c *Client) ListPhysicalVolumes(ctx context.Context, opts ListPhysicalVolum
 		"--nosuffix",
 		"-o", "pv_name,pv_uuid,vg_name,pv_size,pv_free,pv_attr,pv_tags",
 	)
+	if opts.Select != "" {
+		cmd = cmd.Append("-S", string(opts.Select))
+	}
 
 	output, err := c.runner.Run(ctx, cmd)
 	if err != nil {
@@ -83,12 +88,12 @@ type RemovePhysicalVolumeOptions struct {
 
 // RemovePhysicalVolume wipes the lvm label from the given device. A pv
 // belonging to a vg is refused.
-func (c *Client) RemovePhysicalVolume(ctx context.Context, device string, opts RemovePhysicalVolumeOptions) error {
+func (c *Client) RemovePhysicalVolume(ctx context.Context, device Device, opts RemovePhysicalVolumeOptions) error {
 	if opts.Autobackup != nil {
 		return errAutobackupNotSupported
 	}
 
-	cmd := c.command("pvremove", opts.CommonOptions).Append(device)
+	cmd := c.command("pvremove", opts.CommonOptions).Append(string(device))
 
 	_, err := c.runner.Run(ctx, cmd)
 	if err != nil {
@@ -118,9 +123,10 @@ type ChangePhysicalVolumeOptions struct {
 	RegenerateUUID bool
 }
 
-// ChangePhysicalVolume changes properties of the given pv, which must
-// be in a vg. All requested changes run as one lvm command.
-func (c *Client) ChangePhysicalVolume(ctx context.Context, device string, opts ChangePhysicalVolumeOptions) error {
+// ChangePhysicalVolume changes properties of the pvs the target
+// selects. The pvs must be in a vg. All requested changes run as one
+// lvm command.
+func (c *Client) ChangePhysicalVolume(ctx context.Context, target Selector, opts ChangePhysicalVolumeOptions) error {
 	cmd := c.metadataCommand("pvchange", opts.CommonOptions)
 
 	properties := 0
@@ -149,11 +155,14 @@ func (c *Client) ChangePhysicalVolume(ctx context.Context, device string, opts C
 		return errors.New("changing a physical volume requires at least one property")
 	}
 
-	cmd = cmd.Append(device)
-
-	_, err := c.runner.Run(ctx, cmd)
+	cmd, err := appendSelector(cmd, target)
 	if err != nil {
-		return fmt.Errorf("changing physical volume %s: %w", device, err)
+		return err
+	}
+
+	_, err = c.runner.Run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("changing physical volumes %v: %w", target, err)
 	}
 
 	return nil
@@ -171,7 +180,7 @@ type ResizePhysicalVolumeOptions struct {
 
 // ResizePhysicalVolume resizes the given pv, by default to the current
 // size of its underlying device.
-func (c *Client) ResizePhysicalVolume(ctx context.Context, device string, opts ResizePhysicalVolumeOptions) error {
+func (c *Client) ResizePhysicalVolume(ctx context.Context, device Device, opts ResizePhysicalVolumeOptions) error {
 	cmd := c.metadataCommand("pvresize", opts.CommonOptions)
 	if opts.SizeBytes > 0 {
 		cmd = cmd.Append(
@@ -179,7 +188,7 @@ func (c *Client) ResizePhysicalVolume(ctx context.Context, device string, opts R
 			"-y",
 		)
 	}
-	cmd = cmd.Append(device)
+	cmd = cmd.Append(string(device))
 
 	_, err := c.runner.Run(ctx, cmd)
 	if err != nil {
@@ -238,7 +247,7 @@ func parsePVReport(output []byte) ([]PhysicalVolume, error) {
 			}
 
 			volumes = append(volumes, PhysicalVolume{
-				Device:      pv.Name,
+				Device:      Device(pv.Name),
 				UUID:        pv.UUID,
 				VolumeGroup: pv.VG,
 				SizeBytes:   size,

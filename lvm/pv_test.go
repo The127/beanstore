@@ -63,7 +63,7 @@ func TestCallDevicesOverrideClientDevices(t *testing.T) {
 	client := New(WithRunner(fake), WithDevices("/dev/loop0"))
 
 	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop7", CreatePhysicalVolumeOptions{
-		CommonOptions: CommonOptions{Devices: []string{"/dev/loop7"}},
+		CommonOptions: CommonOptions{Devices: []Device{"/dev/loop7"}},
 	})
 
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestChangePhysicalVolumeCombinesPropertiesInOneCommand(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	err := client.ChangePhysicalVolume(t.Context(), "/dev/loop0", ChangePhysicalVolumeOptions{
+	err := client.ChangePhysicalVolume(t.Context(), Device("/dev/loop0"), ChangePhysicalVolumeOptions{
 		AddTags:        []string{"fast", "ssd"},
 		RemoveTags:     []string{"old"},
 		Allocatable:    Bool(false),
@@ -205,7 +205,7 @@ func TestChangePhysicalVolumeRequiresAProperty(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	err := client.ChangePhysicalVolume(t.Context(), "/dev/loop0", ChangePhysicalVolumeOptions{})
+	err := client.ChangePhysicalVolume(t.Context(), Device("/dev/loop0"), ChangePhysicalVolumeOptions{})
 
 	assert.ErrorContains(t, err, "at least one property")
 	assert.Empty(t, fake.calls)
@@ -235,4 +235,58 @@ func TestRunnerErrorsPropagate(t *testing.T) {
 	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop0", CreatePhysicalVolumeOptions{})
 
 	assert.ErrorIs(t, err, assert.AnError)
+}
+
+func TestChangePhysicalVolumeBySelect(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ChangePhysicalVolume(t.Context(), Select("pv_tags = @retiring"), ChangePhysicalVolumeOptions{
+		AddTags: []string{"drained"},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"pvchange",
+		"--addtag", "drained",
+		"-S", "pv_tags = @retiring",
+	}, fake.calls[0].Args())
+}
+
+func TestChangePhysicalVolumeAll(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ChangePhysicalVolume(t.Context(), All, ChangePhysicalVolumeOptions{
+		AddTags: []string{"seen"},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvchange", "--addtag", "seen", "-a"}, fake.calls[0].Args())
+}
+
+func TestChangePhysicalVolumeRejectsNilSelector(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ChangePhysicalVolume(t.Context(), nil, ChangePhysicalVolumeOptions{
+		AddTags: []string{"x"},
+	})
+
+	assert.ErrorContains(t, err, "nil selector")
+	assert.Empty(t, fake.calls)
+}
+
+func TestListPhysicalVolumesWithSelect(t *testing.T) {
+	fake := &fakeRunner{output: []byte(`{"report": [{"pv": []}]}`)}
+	client := New(WithRunner(fake))
+
+	_, err := client.ListPhysicalVolumes(t.Context(), ListPhysicalVolumesOptions{
+		Select: "pv_size > 500g",
+	})
+
+	require.NoError(t, err)
+	args := fake.calls[0].Args()
+	assert.Equal(t, "-S", args[len(args)-2])
+	assert.Equal(t, "pv_size > 500g", args[len(args)-1])
 }
