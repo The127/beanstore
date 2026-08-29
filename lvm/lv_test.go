@@ -179,6 +179,60 @@ func TestCreateThinVolumeOptionsBuildCommand(t *testing.T) {
 	}, fake.calls[0].Args())
 }
 
+func TestCreateSnapshotBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.CreateSnapshot(t.Context(), "vg0", "lv0", "snap0", 8388608, CreateSnapshotOptions{
+		AddTags:        []string{"backup"},
+		ChunkSizeBytes: 65536,
+		Activate:       Bool(true),
+		Permission:     PermissionReadOnly,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"lvcreate",
+		"-s",
+		"-L", "8388608b",
+		"-n", "snap0",
+		"--addtag", "backup",
+		"-c", "65536b",
+		"-a", "y",
+		"-p", "r",
+		"vg0/lv0",
+	}, fake.calls[0].Args())
+}
+
+func TestCreateThinSnapshotBuildsCommands(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.CreateThinSnapshot(t.Context(), "vg0", "vol1", "snap1", CreateThinSnapshotOptions{
+		IgnoreActivationSkip: true,
+	}))
+	require.NoError(t, client.CreateThinSnapshot(t.Context(), "vg0", "ext0", "snap2", CreateThinSnapshotOptions{
+		Pool:              "pool0",
+		SetActivationSkip: Bool(false),
+	}))
+
+	assert.Equal(t, []string{
+		"lvcreate",
+		"-s",
+		"-n", "snap1",
+		"-K",
+		"vg0/vol1",
+	}, fake.calls[0].Args())
+	assert.Equal(t, []string{
+		"lvcreate",
+		"-s",
+		"-n", "snap2",
+		"--thinpool", "pool0",
+		"-k", "n",
+		"vg0/ext0",
+	}, fake.calls[1].Args())
+}
+
 func TestListLogicalVolumesBuildsCommandAndParses(t *testing.T) {
 	fake := &fakeRunner{output: []byte(`{
 		"report": [{"lv": [

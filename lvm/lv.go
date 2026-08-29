@@ -290,6 +290,163 @@ func (c *Client) CreateThinVolume(ctx context.Context, vg, pool, name string, vi
 	return nil
 }
 
+// CreateSnapshotOptions configures CreateSnapshot.
+type CreateSnapshotOptions struct {
+	CommonOptions
+	AddTags []string
+	// ChunkSizeBytes sets the copy on write chunk size, lvm's default
+	// when zero.
+	ChunkSizeBytes uint64
+	// Activate controls whether the new snapshot is activated, lvm's
+	// default when nil.
+	Activate *bool
+	// Permission sets the snapshot read/write permission.
+	Permission Permission
+	// Readahead sets the snapshot readahead.
+	Readahead Readahead
+	// Contiguous controls contiguous extent allocation.
+	Contiguous *bool
+	// Allocation sets the extent allocation policy.
+	Allocation AllocationPolicy
+	// SetActivationSkip controls the flag that makes activation skip
+	// the snapshot unless IgnoreActivationSkip is used.
+	SetActivationSkip *bool
+	// IgnoreActivationSkip activates the snapshot even when flagged to
+	// be skipped.
+	IgnoreActivationSkip bool
+	// SetAutoactivation controls whether the snapshot autoactivates on
+	// boot and device appearance.
+	SetAutoactivation *bool
+}
+
+// CreateSnapshot creates a copy on write snapshot of the given
+// vg/origin with the given size for changed blocks. A snapshot whose
+// size fills up becomes invalid.
+func (c *Client) CreateSnapshot(ctx context.Context, vg, origin, name string, sizeBytes uint64, opts CreateSnapshotOptions) error {
+	cmd := c.metadataCommand("lvcreate", opts.CommonOptions).Append(
+		"-s",
+		"-L", strconv.FormatUint(sizeBytes, 10)+"b",
+		"-n", name,
+	)
+	for _, tag := range opts.AddTags {
+		cmd = cmd.Append("--addtag", tag)
+	}
+	if opts.ChunkSizeBytes > 0 {
+		cmd = cmd.Append("-c", strconv.FormatUint(opts.ChunkSizeBytes, 10)+"b")
+	}
+	if opts.Activate != nil {
+		cmd = cmd.Append("-a", flagValue(*opts.Activate))
+	}
+	if opts.Permission != "" {
+		cmd = cmd.Append("-p", string(opts.Permission))
+	}
+	if opts.Readahead != "" {
+		cmd = cmd.Append("-r", string(opts.Readahead))
+	}
+	if opts.Contiguous != nil {
+		cmd = cmd.Append("-C", flagValue(*opts.Contiguous))
+	}
+	if opts.Allocation != "" {
+		cmd = cmd.Append("--alloc", string(opts.Allocation))
+	}
+	if opts.SetActivationSkip != nil {
+		cmd = cmd.Append("-k", flagValue(*opts.SetActivationSkip))
+	}
+	if opts.IgnoreActivationSkip {
+		cmd = cmd.Append("-K")
+	}
+	if opts.SetAutoactivation != nil {
+		cmd = cmd.Append("--setautoactivation", flagValue(*opts.SetAutoactivation))
+	}
+	cmd = cmd.Append(vg + "/" + origin)
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("creating snapshot %s/%s of %s: %w", vg, name, origin, err)
+	}
+
+	return nil
+}
+
+// CreateThinSnapshotOptions configures CreateThinSnapshot.
+type CreateThinSnapshotOptions struct {
+	CommonOptions
+	AddTags []string
+	// Pool creates the snapshot in the given thin pool and turns the
+	// origin, which must not be a thin volume, into a read only
+	// external origin. Empty for snapshots of thin volumes, they live
+	// in the origin's pool.
+	Pool string
+	// Activate controls whether the new snapshot is activated, lvm's
+	// default when nil.
+	Activate *bool
+	// Permission sets the snapshot read/write permission.
+	Permission Permission
+	// Readahead sets the snapshot readahead.
+	Readahead Readahead
+	// Contiguous controls contiguous extent allocation.
+	Contiguous *bool
+	// Allocation sets the extent allocation policy.
+	Allocation AllocationPolicy
+	// SetActivationSkip controls the flag that makes activation skip
+	// the snapshot unless IgnoreActivationSkip is used.
+	SetActivationSkip *bool
+	// IgnoreActivationSkip activates the snapshot even when flagged to
+	// be skipped.
+	IgnoreActivationSkip bool
+	// SetAutoactivation controls whether the snapshot autoactivates on
+	// boot and device appearance.
+	SetAutoactivation *bool
+}
+
+// CreateThinSnapshot creates a thin snapshot of the given vg/origin.
+// lvm flags thin snapshots to be skipped on activation by default, so
+// they are born inactive unless IgnoreActivationSkip is set.
+func (c *Client) CreateThinSnapshot(ctx context.Context, vg, origin, name string, opts CreateThinSnapshotOptions) error {
+	cmd := c.metadataCommand("lvcreate", opts.CommonOptions).Append(
+		"-s",
+		"-n", name,
+	)
+	for _, tag := range opts.AddTags {
+		cmd = cmd.Append("--addtag", tag)
+	}
+	if opts.Pool != "" {
+		cmd = cmd.Append("--thinpool", opts.Pool)
+	}
+	if opts.Activate != nil {
+		cmd = cmd.Append("-a", flagValue(*opts.Activate))
+	}
+	if opts.Permission != "" {
+		cmd = cmd.Append("-p", string(opts.Permission))
+	}
+	if opts.Readahead != "" {
+		cmd = cmd.Append("-r", string(opts.Readahead))
+	}
+	if opts.Contiguous != nil {
+		cmd = cmd.Append("-C", flagValue(*opts.Contiguous))
+	}
+	if opts.Allocation != "" {
+		cmd = cmd.Append("--alloc", string(opts.Allocation))
+	}
+	if opts.SetActivationSkip != nil {
+		cmd = cmd.Append("-k", flagValue(*opts.SetActivationSkip))
+	}
+	if opts.IgnoreActivationSkip {
+		cmd = cmd.Append("-K")
+	}
+	if opts.SetAutoactivation != nil {
+		cmd = cmd.Append("--setautoactivation", flagValue(*opts.SetAutoactivation))
+	}
+	cmd = cmd.Append(vg + "/" + origin)
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("creating thin snapshot %s/%s of %s: %w", vg, name, origin, err)
+	}
+
+	return nil
+}
+
 // ListLogicalVolumesOptions configures ListLogicalVolumes.
 type ListLogicalVolumesOptions struct {
 	CommonOptions

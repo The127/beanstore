@@ -729,6 +729,48 @@ func TestIntegrationLogicalVolumeCreateOptions(t *testing.T) {
 	assert.False(t, vol.Active)
 }
 
+func TestIntegrationSnapshots(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	vg := vgFor(t, loop)
+
+	require.NoError(t, client.CreateLogicalVolume(ctx, vg, "lv0", 32<<20, CreateLogicalVolumeOptions{}))
+	require.NoError(t, client.CreateSnapshot(ctx, vg, "lv0", "snap0", 8<<20, CreateSnapshotOptions{}))
+	snap := lvByName(t, client, vg, "snap0")
+	assert.Equal(t, "lv0", snap.Origin)
+	assert.Equal(t, byte('s'), snap.Attributes[0])
+
+	require.NoError(t, client.CreateThinPool(ctx, vg, "pool0", 256<<20, CreateThinPoolOptions{}))
+	require.NoError(t, client.CreateThinVolume(ctx, vg, "pool0", "vol1", 64<<20, CreateThinVolumeOptions{}))
+	require.NoError(t, client.CreateThinSnapshot(ctx, vg, "vol1", "snap1", CreateThinSnapshotOptions{}))
+	thinSnap := lvByName(t, client, vg, "snap1")
+	assert.Equal(t, "vol1", thinSnap.Origin)
+	assert.Equal(t, "pool0", thinSnap.Pool)
+	assert.Equal(t, byte('k'), thinSnap.Attributes[9], "skip flag set by default")
+	assert.False(t, thinSnap.Active, "born inactive because of the skip flag")
+
+	require.NoError(t, client.ActivateLogicalVolume(ctx, Name(vg+"/snap1"), ActivateLogicalVolumeOptions{
+		IgnoreActivationSkip: true,
+	}))
+	assert.True(t, lvByName(t, client, vg, "snap1").Active)
+
+	// an external origin must be inactive and read only
+	require.NoError(t, client.CreateLogicalVolume(ctx, vg, "ext0", 32<<20, CreateLogicalVolumeOptions{
+		Permission: PermissionReadOnly,
+		Zero:       Bool(false),
+		Activate:   Bool(false),
+	}))
+	require.NoError(t, client.CreateThinSnapshot(ctx, vg, "ext0", "snap2", CreateThinSnapshotOptions{
+		Pool: "pool0",
+	}))
+	extSnap := lvByName(t, client, vg, "snap2")
+	assert.Equal(t, "ext0", extSnap.Origin)
+	assert.Equal(t, "pool0", extSnap.Pool)
+}
+
 func TestIntegrationLogicalVolumeChangeProperties(t *testing.T) {
 	loop := loopDevice(t)
 	client := New(WithRunner(sudoRunner{}), WithDevices(loop))

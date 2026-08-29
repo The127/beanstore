@@ -43,6 +43,8 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `CreateLogicalVolume` | `lvcreate` |
 | `CreateThinPool` | `lvcreate --type thin-pool` |
 | `CreateThinVolume` | `lvcreate --type thin` |
+| `CreateSnapshot` | `lvcreate -s -L` |
+| `CreateThinSnapshot` | `lvcreate -s` |
 | `ListLogicalVolumes` | `lvs` |
 | `RemoveLogicalVolume` | `lvremove` |
 | `ChangeLogicalVolume` | `lvchange` |
