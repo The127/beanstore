@@ -101,24 +101,17 @@ func TestIntegrationCreateOnMissingDeviceFails(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// vgFor wraps the loop devices in a vg through raw commands until the
-// vg family is wrapped.
+// vgFor wraps the loop devices in a vg through the library.
 func vgFor(t *testing.T, loops ...Device) string {
 	t.Helper()
 
-	paths := make([]string, len(loops))
-	for i, loop := range loops {
-		paths[i] = string(loop)
-	}
-	devices := strings.Join(paths, ",")
+	client := New(WithRunner(sudoRunner{}), WithDevices(loops...))
 	vg := fmt.Sprintf("beanstore-test-%d", os.Getpid())
 
-	args := append([]string{"lvm", "vgcreate", "--devices", devices, vg}, paths...)
-	_, err := sudoRun(t.Context(), args...)
-	require.NoError(t, err)
+	require.NoError(t, client.CreateVolumeGroup(t.Context(), vg, loops, CreateVolumeGroupOptions{}))
 	t.Cleanup(func() {
 		//nolint:usetesting // t.Context is done during cleanup
-		_, _ = sudoRun(context.Background(), "lvm", "vgremove", "--devices", devices, "-f", vg)
+		_ = client.RemoveVolumeGroup(context.Background(), vg, RemoveVolumeGroupOptions{Force: true})
 	})
 
 	return vg
@@ -365,4 +358,41 @@ func TestIntegrationCheckAndDumpPhysicalVolume(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Contains(t, output, "label_header")
+}
+
+func TestIntegrationVolumeGroupLifecycle(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+
+	name := fmt.Sprintf("beanstore-vgtest-%d", os.Getpid())
+	require.NoError(t, client.CreateVolumeGroup(ctx, name, []Device{loop}, CreateVolumeGroupOptions{
+		AddTags: []string{"beanstore-test"},
+	}))
+	t.Cleanup(func() {
+		//nolint:usetesting // t.Context is done during cleanup
+		_ = client.RemoveVolumeGroup(context.Background(), name, RemoveVolumeGroupOptions{Force: true})
+	})
+
+	vgs, err := client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{Select: "vg_tags = {beanstore-test}"})
+	require.NoError(t, err)
+	require.Len(t, vgs, 1)
+	assert.Equal(t, name, vgs[0].Name)
+	assert.Equal(t, uint64(1), vgs[0].PVCount)
+	assert.Zero(t, vgs[0].LVCount)
+	assert.NotZero(t, vgs[0].SizeBytes)
+	assert.NotZero(t, vgs[0].ExtentSizeBytes)
+	assert.Equal(t, vgs[0].SizeBytes, vgs[0].FreeBytes)
+
+	err = client.CreateVolumeGroup(ctx, name, []Device{loop}, CreateVolumeGroupOptions{})
+	require.Error(t, err, "duplicate vg name must fail")
+	t.Logf("duplicate vgcreate stderr for the harvest: %v", err)
+
+	require.NoError(t, client.RemoveVolumeGroup(ctx, name, RemoveVolumeGroupOptions{}))
+
+	vgs, err = client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{Select: "vg_tags = {beanstore-test}"})
+	require.NoError(t, err)
+	assert.Empty(t, vgs)
 }

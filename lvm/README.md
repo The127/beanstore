@@ -18,6 +18,9 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `ScanPhysicalVolumes` | `pvscan --cache` |
 | `CheckPhysicalVolume` | `pvck` |
 | `DumpPhysicalVolume` | `pvck --dump` |
+| `CreateVolumeGroup` | `vgcreate` |
+| `ListVolumeGroups` | `vgs` |
+| `RemoveVolumeGroup` | `vgremove` |
 
 Every operation takes an options struct. Its fields cover the command's
 flags, and the embedded `CommonOptions` override the client environment
