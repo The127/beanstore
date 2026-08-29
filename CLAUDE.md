@@ -26,9 +26,9 @@ CONTRIBUTING for the contributor-facing policy):
   e.g. `Co-Authored-By: Claude <noreply@anthropic.com>`.
 - Commits do NOT carry session links or other tool-run metadata (no
   `Claude-Session:` trailers) — this repo overrides that default.
-- The human contributor stays responsible: AI-generated code is committed
-  only after the contributor has reviewed and understood it. AI agents
-  must not push code the contributor has not seen.
+- The human contributor stays responsible: AI agents propose changes and
+  commit only after the contributor has reviewed, understood, and approved
+  them. The gate is at the commit, not the push.
 
 ## Licensing boundary
 
