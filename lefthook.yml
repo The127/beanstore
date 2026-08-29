@@ -15,3 +15,9 @@ commit-msg:
           echo "commit message must follow plain conventional commits: 'type: description' (no scopes)"
           exit 1
         }
+    - name: dco sign-off
+      run: |
+        grep -qE '^Signed-off-by: .+ <.+@.+>' {1} || {
+          echo "commit must be signed off (git commit -s), see CONTRIBUTING.md"
+          exit 1
+        }
