@@ -56,12 +56,15 @@ Required tooling:
 - [just](https://just.systems/) — task runner; `just` lists the available
   recipes, `just ci` runs everything that must pass.
 - [lefthook](https://lefthook.dev/) — git hooks (lint on pre-commit,
-  commit message and sign-off checks on commit-msg). After cloning,
-  activate the hooks once:
+  commit message and sign-off checks on commit-msg).
 
-  ```bash
-  just hooks
-  ```
+After cloning, run the one-time setup — it creates the local (untracked)
+go workspace, so the server builds against your working-tree client, and
+activates the git hooks:
+
+```bash
+just setup
+```
 
 ## License
 

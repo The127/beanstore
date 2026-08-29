@@ -33,6 +33,10 @@ vuln:
     go run golang.org/x/vuln/cmd/govulncheck@latest ./...
     cd client && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
+# one-time dev setup after cloning: local go workspace + git hooks
+setup: hooks
+    test -f go.work || go work init . ./client
+
 # install the git hooks
 hooks:
     lefthook install
