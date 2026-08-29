@@ -710,10 +710,11 @@ func TestIntegrationLogicalVolumeCreateOptions(t *testing.T) {
 	assert.Equal(t, byte('k'), linear.Attributes[9])
 	assert.True(t, linear.Active, "skip flag ignored at creation")
 
+	// lvm 2.03.16 rejects --errorwhenfull at thin pool creation, newer
+	// versions accept it, so it is only tested through lvchange
 	require.NoError(t, client.CreateThinPool(ctx, vg, "pool0", 256<<20, CreateThinPoolOptions{
 		Zero:              Bool(false),
 		Discards:          DiscardsNoPassdown,
-		ErrorWhenFull:     Bool(true),
 		PoolMetadataSpare: Bool(false),
 	}))
 	assert.Equal(t, byte('-'), lvByName(t, client, vg, "pool0").Attributes[7])
@@ -784,8 +785,14 @@ func TestIntegrationLogicalVolumeChangeProperties(t *testing.T) {
 
 	require.NoError(t, client.ChangeLogicalVolume(ctx, Name(vg+"/pool0"), ChangeLogicalVolumeOptions{
 		Zero:          Bool(false),
-		Discards:      DiscardsNoPassdown,
 		ErrorWhenFull: Bool(true),
+	}))
+	// lvm 2.03.16 dispatches pool zero and discards separately but the
+	// shared handler processes both flags each time, so combining them
+	// applies the values and then fails on the repeat, discards changes
+	// alone
+	require.NoError(t, client.ChangeLogicalVolume(ctx, Name(vg+"/pool0"), ChangeLogicalVolumeOptions{
+		Discards: DiscardsNoPassdown,
 	}))
 	// lv_attr char 8 is z when the pool zeroes new blocks
 	assert.Equal(t, byte('-'), lvByName(t, client, vg, "pool0").Attributes[7])

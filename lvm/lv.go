@@ -653,7 +653,9 @@ func ReadaheadSectors(sectors uint64) Readahead {
 
 // ChangeLogicalVolumeOptions configures ChangeLogicalVolume. At least
 // one property must be set. Zero, Discards and ErrorWhenFull are thin
-// pool properties.
+// pool properties. lvm fails when Zero or Discards already have the
+// requested value, and older lvm (2.03.16) fails when both are set in
+// one call.
 type ChangeLogicalVolumeOptions struct {
 	CommonOptions
 	AddTags    []string
