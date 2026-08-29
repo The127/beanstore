@@ -32,6 +32,14 @@ service VolumeService {
   // ResizeVolume grows a READY or ATTACHED volume to the given size.
   // Shrinking is refused.
   rpc ResizeVolume(ResizeVolumeRequest) returns (ResizeVolumeResponse);
+
+  // CreateSnapshot creates a point in time snapshot of a READY or
+  // ATTACHED volume. Snapshots of snapshots are refused.
+  rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse);
+
+  // DeleteSnapshot removes a SNAPSHOT. Volumes are removed with
+  // DeleteVolume instead.
+  rpc DeleteSnapshot(DeleteSnapshotRequest) returns (DeleteSnapshotResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -51,6 +59,7 @@ enum VolumeState {
   VOLUME_STATE_INCOMING = 5;
   VOLUME_STATE_RETIRED = 6;
   VOLUME_STATE_DELETING = 7;
+  VOLUME_STATE_SNAPSHOT = 8;
 }
 
 message Volume {
@@ -60,6 +69,8 @@ message Volume {
   uint64 size_bytes = 3;
   // used_bytes is the real pool space the volume occupies.
   uint64 used_bytes = 4;
+  // origin_id names a snapshot's origin volume, empty otherwise.
+  string origin_id = 5;
 }
 
 message ListVolumesRequest {}
@@ -85,7 +96,23 @@ message DetachResponse {}
 message DeleteVolumeRequest {
   string volume_id = 1;
   string operation_id = 2;
+  // force also removes the volume's snapshots. Without it a volume
+  // with snapshots is refused.
+  bool force = 3;
 }
+
+message CreateSnapshotRequest {
+  string volume_id = 1;
+  string snapshot_id = 2;
+}
+
+message CreateSnapshotResponse {}
+
+message DeleteSnapshotRequest {
+  string snapshot_id = 1;
+}
+
+message DeleteSnapshotResponse {}
 
 message DeleteVolumeResponse {}
 

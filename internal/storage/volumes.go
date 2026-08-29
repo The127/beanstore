@@ -23,6 +23,7 @@ const (
 	StateIncoming State = "incoming"
 	StateRetired  State = "retired"
 	StateDeleting State = "deleting"
+	StateSnapshot State = "snapshot"
 	StateUnknown  State = ""
 )
 
@@ -42,6 +43,8 @@ type Volume struct {
 	UsedBytes uint64
 	// Path is the block device path, empty while inactive.
 	Path string
+	// Origin names a snapshot's origin volume, empty otherwise.
+	Origin string
 }
 
 // ErrNotFound reports that no beanstore volume with the given id
@@ -89,6 +92,7 @@ func ListVolumes(ctx context.Context, client *lvm.Client, cfg config.Config) ([]
 			SizeBytes: lv.SizeBytes,
 			UsedBytes: uint64(float64(lv.SizeBytes) * lv.DataPercent / 100),
 			Path:      lv.Path,
+			Origin:    lv.Origin,
 		})
 	}
 
@@ -156,7 +160,65 @@ func GetVolume(ctx context.Context, client *lvm.Client, cfg config.Config, id st
 		SizeBytes: lvs[0].SizeBytes,
 		UsedBytes: uint64(float64(lvs[0].SizeBytes) * lvs[0].DataPercent / 100),
 		Path:      lvs[0].Path,
+		Origin:    lvs[0].Origin,
 	}, nil
+}
+
+// SnapshotsOf lists the ids of the volume's snapshots.
+func SnapshotsOf(ctx context.Context, client *lvm.Client, cfg config.Config, id string) ([]string, error) {
+	lvs, err := client.ListLogicalVolumes(ctx, lvm.ListLogicalVolumesOptions{
+		VG:     cfg.VolumeGroup,
+		Select: lvm.Select("origin = " + id),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing snapshots of %s: %w", id, err)
+	}
+
+	var snapshots []string
+	for _, lv := range lvs {
+		state, owned := stateOf(lv.Tags)
+		if owned && state == StateSnapshot {
+			snapshots = append(snapshots, lv.Name)
+		}
+	}
+
+	return snapshots, nil
+}
+
+// CreateSnapshot creates a thin snapshot of a READY or ATTACHED
+// volume. The snapshot stays inactive, lvm flags it to be skipped on
+// activation.
+func CreateSnapshot(ctx context.Context, client *lvm.Client, cfg config.Config, originID, snapshotID string) error {
+	origin, err := GetVolume(ctx, client, cfg, originID)
+	if err != nil {
+		return err
+	}
+	if origin.State != StateReady && origin.State != StateAttached {
+		return &WrongStateError{Volume: originID, Found: origin.State}
+	}
+
+	err = client.CreateThinSnapshot(ctx, cfg.VolumeGroup, originID, snapshotID, lvm.CreateThinSnapshotOptions{
+		AddTags: []string{StateTag(StateSnapshot)},
+	})
+	if err != nil {
+		return fmt.Errorf("creating snapshot %s of %s: %w", snapshotID, originID, err)
+	}
+
+	return nil
+}
+
+// DeleteSnapshot removes a snapshot. Only lvs in snapshot state
+// qualify, volumes are removed through their delete flow.
+func DeleteSnapshot(ctx context.Context, client *lvm.Client, cfg config.Config, id string) error {
+	snapshot, err := GetVolume(ctx, client, cfg, id)
+	if err != nil {
+		return err
+	}
+	if snapshot.State != StateSnapshot {
+		return &WrongStateError{Volume: id, Found: snapshot.State}
+	}
+
+	return RemoveVolume(ctx, client, cfg, id)
 }
 
 // Attach activates a READY volume and returns its block device path.
@@ -247,16 +309,39 @@ func ResizeVolume(ctx context.Context, client *lvm.Client, cfg config.Config, id
 	return nil
 }
 
-// MarkDeleting retags a READY or RETIRED volume as deleting. The tag
-// persists before the caller answers, a crash leaves a deleting volume
-// that recovery removes.
-func MarkDeleting(ctx context.Context, client *lvm.Client, cfg config.Config, id string) error {
+// ErrHasSnapshots reports a volume delete without force while
+// snapshots of the volume exist.
+var ErrHasSnapshots = errors.New("volume has snapshots")
+
+// MarkDeleting retags a READY or RETIRED volume as deleting and
+// returns the snapshot ids to remove along with it. Without force,
+// existing snapshots refuse the delete. The tags persist before the
+// caller answers, a crash leaves deleting lvs that recovery removes.
+func MarkDeleting(ctx context.Context, client *lvm.Client, cfg config.Config, id string, force bool) ([]string, error) {
 	volume, err := GetVolume(ctx, client, cfg, id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if volume.State != StateReady && volume.State != StateRetired {
-		return &WrongStateError{Volume: id, Found: volume.State}
+		return nil, &WrongStateError{Volume: id, Found: volume.State}
+	}
+
+	snapshots, err := SnapshotsOf(ctx, client, cfg, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(snapshots) > 0 && !force {
+		return nil, fmt.Errorf("%w: %s", ErrHasSnapshots, id)
+	}
+
+	for _, snapshot := range snapshots {
+		err = client.ChangeLogicalVolume(ctx, lvm.Name(cfg.VolumeGroup+"/"+snapshot), lvm.ChangeLogicalVolumeOptions{
+			AddTags:    []string{StateTag(StateDeleting)},
+			RemoveTags: []string{StateTag(StateSnapshot)},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("marking snapshot %s deleting: %w", snapshot, err)
+		}
 	}
 
 	err = client.ChangeLogicalVolume(ctx, lvm.Name(cfg.VolumeGroup+"/"+id), lvm.ChangeLogicalVolumeOptions{
@@ -264,10 +349,10 @@ func MarkDeleting(ctx context.Context, client *lvm.Client, cfg config.Config, id
 		RemoveTags: []string{StateTag(volume.State)},
 	})
 	if err != nil {
-		return fmt.Errorf("marking volume %s deleting: %w", id, err)
+		return nil, fmt.Errorf("marking volume %s deleting: %w", id, err)
 	}
 
-	return nil
+	return snapshots, nil
 }
 
 // RemoveVolume removes a volume's lv.
@@ -346,6 +431,7 @@ var knownStates = map[State]bool{
 	StateIncoming: true,
 	StateRetired:  true,
 	StateDeleting: true,
+	StateSnapshot: true,
 }
 
 func knownState(value string) State {

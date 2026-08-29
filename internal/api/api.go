@@ -130,6 +130,7 @@ func (s *volumeServiceServer) ListVolumes(ctx context.Context, _ *beanstorev1.Li
 			State:     protoState(volume.State),
 			SizeBytes: volume.SizeBytes,
 			UsedBytes: volume.UsedBytes,
+			OriginId:  volume.Origin,
 		})
 	}
 
@@ -175,27 +176,67 @@ func (s *volumeServiceServer) DeleteVolume(ctx context.Context, request *beansto
 		return nil, status.Error(codes.AlreadyExists, "operation id already used")
 	}
 
-	err = storage.MarkDeleting(ctx, s.lvm, s.cfg, request.VolumeId)
+	snapshots, err := storage.MarkDeleting(ctx, s.lvm, s.cfg, request.VolumeId, request.Force)
 	if err != nil {
 		s.ops.Fail(request.OperationId, err.Error())
 		return nil, volumeError(ctx, err, "deleting failed")
 	}
 
-	go s.runDelete(request.VolumeId, request.OperationId)
+	go s.runDelete(request.VolumeId, snapshots, request.OperationId)
 
 	return &beanstorev1.DeleteVolumeResponse{}, nil
 }
 
-func (s *volumeServiceServer) runDelete(id, operationID string) {
-	err := storage.RemoveVolume(s.background, s.lvm, s.cfg, id)
-	if err != nil {
-		logging.FromContext(s.background).Error("removing volume", "volume", id, "error", err)
-		s.ops.Fail(operationID, err.Error())
+func (s *volumeServiceServer) runDelete(id string, snapshots []string, operationID string) {
+	for _, target := range append(snapshots, id) {
+		err := storage.RemoveVolume(s.background, s.lvm, s.cfg, target)
+		if err != nil {
+			logging.FromContext(s.background).Error("removing volume", "volume", target, "error", err)
+			s.ops.Fail(operationID, err.Error())
 
-		return
+			return
+		}
 	}
 
 	s.ops.Done(operationID)
+}
+
+func (s *volumeServiceServer) CreateSnapshot(ctx context.Context, request *beanstorev1.CreateSnapshotRequest) (*beanstorev1.CreateSnapshotResponse, error) {
+	if !volumeIDPattern.MatchString(request.VolumeId) {
+		return nil, status.Error(codes.InvalidArgument, "volume_id is not a valid lv name")
+	}
+	if !volumeIDPattern.MatchString(request.SnapshotId) {
+		return nil, status.Error(codes.InvalidArgument, "snapshot_id is not a valid lv name")
+	}
+
+	exists, err := storage.VolumeExists(ctx, s.lvm, s.cfg, request.SnapshotId)
+	if err != nil {
+		logging.FromContext(ctx).Error("looking up snapshot", "snapshot", request.SnapshotId, "error", err)
+		return nil, status.Error(codes.Internal, "snapshot lookup failed")
+	}
+	if exists {
+		return nil, status.Error(codes.AlreadyExists, "snapshot already exists")
+	}
+
+	err = storage.CreateSnapshot(ctx, s.lvm, s.cfg, request.VolumeId, request.SnapshotId)
+	if err != nil {
+		return nil, volumeError(ctx, err, "creating snapshot failed")
+	}
+
+	return &beanstorev1.CreateSnapshotResponse{}, nil
+}
+
+func (s *volumeServiceServer) DeleteSnapshot(ctx context.Context, request *beanstorev1.DeleteSnapshotRequest) (*beanstorev1.DeleteSnapshotResponse, error) {
+	if !volumeIDPattern.MatchString(request.SnapshotId) {
+		return nil, status.Error(codes.InvalidArgument, "snapshot_id is not a valid lv name")
+	}
+
+	err := storage.DeleteSnapshot(ctx, s.lvm, s.cfg, request.SnapshotId)
+	if err != nil {
+		return nil, volumeError(ctx, err, "deleting snapshot failed")
+	}
+
+	return &beanstorev1.DeleteSnapshotResponse{}, nil
 }
 
 func (s *volumeServiceServer) ResizeVolume(ctx context.Context, request *beanstorev1.ResizeVolumeRequest) (*beanstorev1.ResizeVolumeResponse, error) {
@@ -222,7 +263,7 @@ func volumeError(ctx context.Context, err error, message string) error {
 	case errors.Is(err, storage.ErrNotFound):
 		return status.Error(codes.NotFound, "volume does not exist")
 
-	case errors.Is(err, storage.ErrShrink):
+	case errors.Is(err, storage.ErrShrink), errors.Is(err, storage.ErrHasSnapshots):
 		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.As(err, &wrongState):
@@ -306,6 +347,9 @@ func protoState(state storage.State) beanstorev1.VolumeState {
 
 	case storage.StateDeleting:
 		return beanstorev1.VolumeState_VOLUME_STATE_DELETING
+
+	case storage.StateSnapshot:
+		return beanstorev1.VolumeState_VOLUME_STATE_SNAPSHOT
 
 	default:
 		return beanstorev1.VolumeState_VOLUME_STATE_UNSPECIFIED

@@ -42,7 +42,7 @@ func Recover(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 			}
 			log.Info("re-activated attached volume", "volume", volume.ID)
 
-		case StateReady:
+		case StateReady, StateSnapshot:
 
 		case StatePushing, StateIncoming, StateRetired, StateUnknown:
 			log.Warn("volume not covered by recovery",

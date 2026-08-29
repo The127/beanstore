@@ -244,7 +244,7 @@ func TestResizeVolumeCodes(t *testing.T) {
 }
 
 func TestDeleteVolumeRunsToDone(t *testing.T) {
-	fake := &fakeRunner{outputs: []string{readyLV}}
+	fake := &fakeRunner{outputs: []string{readyLV, noLVs}}
 	volumes, operationsServer := testServer(t, fake)
 
 	_, err := volumes.DeleteVolume(t.Context(), &beanstorev1.DeleteVolumeRequest{
@@ -258,9 +258,9 @@ func TestDeleteVolumeRunsToDone(t *testing.T) {
 		return err == nil && response.GetDone() != nil
 	}, time.Second, time.Millisecond)
 
-	retagged := strings.Join(fake.args(1), " ")
+	retagged := strings.Join(fake.args(2), " ")
 	assert.Contains(t, retagged, "--addtag beanstore.state=deleting")
-	assert.Equal(t, []string{"lvremove", "-f", "vg0/vol-1"}, fake.args(2))
+	assert.Equal(t, []string{"lvremove", "-f", "vg0/vol-1"}, fake.args(3))
 }
 
 func TestDeleteVolumeRefusesAttachedAndFailsOperation(t *testing.T) {

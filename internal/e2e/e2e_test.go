@@ -240,14 +240,55 @@ func TestIntegrationDaemonLifecycle(t *testing.T) {
 	})
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err), "attached volumes cannot be deleted")
 
+	_, err = volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-1",
+	})
+	require.NoError(t, err, "snapshots of attached volumes work")
+
+	list, err = volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	require.Len(t, list.Volumes, 2)
+	for _, volume := range list.Volumes {
+		if volume.VolumeId == "snap-1" {
+			assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_SNAPSHOT, volume.State)
+			assert.Equal(t, "vol-1", volume.OriginId)
+		}
+	}
+
+	_, err = volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "snap-1",
+		SnapshotId: "snap-2",
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err), "no snapshots of snapshots")
+
+	_, err = volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "snap-1"})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err), "snapshots are not attachable")
+
 	_, err = volumes.Detach(ctx, &beanstorev1.DetachRequest{VolumeId: "vol-1"})
 	require.NoError(t, err)
 
 	_, err = volumes.DeleteVolume(ctx, &beanstorev1.DeleteVolumeRequest{
 		VolumeId:    "vol-1",
-		OperationId: "op-delete",
+		OperationId: "op-refused-delete",
 	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err), "snapshots block the delete")
+
+	_, err = volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
 	require.NoError(t, err)
+
+	_, err = volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-1",
+	})
+	require.NoError(t, err, "snapshots of ready volumes work")
+
+	_, err = volumes.DeleteVolume(ctx, &beanstorev1.DeleteVolumeRequest{
+		VolumeId:    "vol-1",
+		OperationId: "op-delete",
+		Force:       true,
+	})
+	require.NoError(t, err, "force cascades over the snapshot")
 	waitDone(t, operations, "op-delete")
 
 	list, err = volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})

@@ -19,13 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	VolumeService_CreateVolume_FullMethodName  = "/beanstore.v1.VolumeService/CreateVolume"
-	VolumeService_ListVolumes_FullMethodName   = "/beanstore.v1.VolumeService/ListVolumes"
-	VolumeService_GetNodeStatus_FullMethodName = "/beanstore.v1.VolumeService/GetNodeStatus"
-	VolumeService_Attach_FullMethodName        = "/beanstore.v1.VolumeService/Attach"
-	VolumeService_Detach_FullMethodName        = "/beanstore.v1.VolumeService/Detach"
-	VolumeService_DeleteVolume_FullMethodName  = "/beanstore.v1.VolumeService/DeleteVolume"
-	VolumeService_ResizeVolume_FullMethodName  = "/beanstore.v1.VolumeService/ResizeVolume"
+	VolumeService_CreateVolume_FullMethodName   = "/beanstore.v1.VolumeService/CreateVolume"
+	VolumeService_ListVolumes_FullMethodName    = "/beanstore.v1.VolumeService/ListVolumes"
+	VolumeService_GetNodeStatus_FullMethodName  = "/beanstore.v1.VolumeService/GetNodeStatus"
+	VolumeService_Attach_FullMethodName         = "/beanstore.v1.VolumeService/Attach"
+	VolumeService_Detach_FullMethodName         = "/beanstore.v1.VolumeService/Detach"
+	VolumeService_DeleteVolume_FullMethodName   = "/beanstore.v1.VolumeService/DeleteVolume"
+	VolumeService_ResizeVolume_FullMethodName   = "/beanstore.v1.VolumeService/ResizeVolume"
+	VolumeService_CreateSnapshot_FullMethodName = "/beanstore.v1.VolumeService/CreateSnapshot"
+	VolumeService_DeleteSnapshot_FullMethodName = "/beanstore.v1.VolumeService/DeleteSnapshot"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -54,6 +56,12 @@ type VolumeServiceClient interface {
 	// ResizeVolume grows a READY or ATTACHED volume to the given size.
 	// Shrinking is refused.
 	ResizeVolume(ctx context.Context, in *ResizeVolumeRequest, opts ...grpc.CallOption) (*ResizeVolumeResponse, error)
+	// CreateSnapshot creates a point in time snapshot of a READY or
+	// ATTACHED volume. Snapshots of snapshots are refused.
+	CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (*CreateSnapshotResponse, error)
+	// DeleteSnapshot removes a SNAPSHOT. Volumes are removed with
+	// DeleteVolume instead.
+	DeleteSnapshot(ctx context.Context, in *DeleteSnapshotRequest, opts ...grpc.CallOption) (*DeleteSnapshotResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -134,6 +142,26 @@ func (c *volumeServiceClient) ResizeVolume(ctx context.Context, in *ResizeVolume
 	return out, nil
 }
 
+func (c *volumeServiceClient) CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (*CreateSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateSnapshotResponse)
+	err := c.cc.Invoke(ctx, VolumeService_CreateSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *volumeServiceClient) DeleteSnapshot(ctx context.Context, in *DeleteSnapshotRequest, opts ...grpc.CallOption) (*DeleteSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteSnapshotResponse)
+	err := c.cc.Invoke(ctx, VolumeService_DeleteSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -160,6 +188,12 @@ type VolumeServiceServer interface {
 	// ResizeVolume grows a READY or ATTACHED volume to the given size.
 	// Shrinking is refused.
 	ResizeVolume(context.Context, *ResizeVolumeRequest) (*ResizeVolumeResponse, error)
+	// CreateSnapshot creates a point in time snapshot of a READY or
+	// ATTACHED volume. Snapshots of snapshots are refused.
+	CreateSnapshot(context.Context, *CreateSnapshotRequest) (*CreateSnapshotResponse, error)
+	// DeleteSnapshot removes a SNAPSHOT. Volumes are removed with
+	// DeleteVolume instead.
+	DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -190,6 +224,12 @@ func (UnimplementedVolumeServiceServer) DeleteVolume(context.Context, *DeleteVol
 }
 func (UnimplementedVolumeServiceServer) ResizeVolume(context.Context, *ResizeVolumeRequest) (*ResizeVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResizeVolume not implemented")
+}
+func (UnimplementedVolumeServiceServer) CreateSnapshot(context.Context, *CreateSnapshotRequest) (*CreateSnapshotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateSnapshot not implemented")
+}
+func (UnimplementedVolumeServiceServer) DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteSnapshot not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -338,6 +378,42 @@ func _VolumeService_ResizeVolume_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_CreateSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).CreateSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_CreateSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).CreateSnapshot(ctx, req.(*CreateSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VolumeService_DeleteSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).DeleteSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_DeleteSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).DeleteSnapshot(ctx, req.(*DeleteSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -372,6 +448,14 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResizeVolume",
 			Handler:    _VolumeService_ResizeVolume_Handler,
+		},
+		{
+			MethodName: "CreateSnapshot",
+			Handler:    _VolumeService_CreateSnapshot_Handler,
+		},
+		{
+			MethodName: "DeleteSnapshot",
+			Handler:    _VolumeService_DeleteSnapshot_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
