@@ -6,7 +6,7 @@ Please report vulnerabilities privately via
 [GitHub private vulnerability reporting](https://github.com/The127/beanstore/security/advisories/new)
 — do not open a public issue for security problems.
 
-You can expect an acknowledgement within a week. Please include enough
+You can expect a timely response. Please include enough
 detail to reproduce the issue (affected component, setup, steps).
 
 There is no bug bounty program.
