@@ -30,6 +30,15 @@ jobs:
           version: v2.11.4
           working-directory: client
 
+      - name: proto lint
+        uses: bufbuild/buf-action@v1
+        with:
+          lint: true
+          format: false
+          breaking: false
+          push: false
+          archive: false
+
       - name: prose check
         run: |
           emdash=$(printf '\342\200\224')

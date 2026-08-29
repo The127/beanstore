@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package beanstore.v1;
+
+option go_package = "github.com/The127/beanstore/client/gen/beanstore/v1;beanstorev1";
+
+// VolumeService is the per-node volume lifecycle API. Verbs are
+// strict-state: a verb in the wrong state is refused, never absorbed.
+service VolumeService {
+  // CreateVolume starts creation of a thin LV. All ids are minted by the
+  // orchestrator, including the operation id used to poll progress.
+  rpc CreateVolume(CreateVolumeRequest) returns (CreateVolumeResponse);
+}
+
+// OperationService reports on long-running node operations. Operation
+// handles are volatile: a node restart forgets them, callers rescan.
+service OperationService {
+  rpc GetOperation(GetOperationRequest) returns (GetOperationResponse);
+}
+
+message CreateVolumeRequest {
+  string volume_id = 1;
+  uint64 size_bytes = 2;
+  string operation_id = 3;
+}
+
+message CreateVolumeResponse {}
+
+message GetOperationRequest {
+  string operation_id = 1;
+}
+
+message GetOperationResponse {
+  oneof state {
+    OperationPending pending = 1;
+    OperationProgress progress = 2;
+    OperationDone done = 3;
+    OperationFailed failed = 4;
+  }
+}
+
+message OperationPending {}
+
+message OperationProgress {
+  uint64 bytes_done = 1;
+}
+
+message OperationDone {}
+
+message OperationFailed {
+  string reason = 1;
+}

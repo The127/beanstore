@@ -33,6 +33,14 @@ fmt:
     golangci-lint fmt ./...
     cd client && golangci-lint fmt ./...
 
+# regenerate grpc code from the protos
+proto:
+    buf generate
+
+# lint the protos
+proto-lint:
+    buf lint
+
 # check that package doc comments live in doc.go
 doccheck:
     bash scripts/check-doc-comments.sh
@@ -60,4 +68,4 @@ hooks:
     lefthook install
 
 # everything that must pass before a push
-ci: lint prose doccheck build test vuln
+ci: lint proto-lint prose doccheck build test vuln

@@ -21,8 +21,9 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
+# Go workspace files
 go.work
+go.work.sum
 
 ### GoLand+all ###
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio, WebStorm and Rider
@@ -134,8 +135,9 @@ fabric.properties
 # End of https://www.toptal.com/developers/gitignore/api/go,goland+all,visualstudiocode
 
 ### Project ###
+# design docs, kept out of the repo for now
 docs/
+# compiled binary
 /beanstore
-
 # Claude Code personal extension
 CLAUDE.local.md

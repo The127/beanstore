@@ -58,6 +58,8 @@ Required tooling:
   the root and the client library in `client/`.
 - [golangci-lint](https://golangci-lint.run/) v2: linting, configured in
   `.golangci.yml`.
+- [buf](https://buf.build/): protobuf linting and code generation
+  (`just proto-lint`, `just proto`).
 - [just](https://just.systems/): task runner. `just` lists the available
   recipes, `just ci` runs everything that must pass.
 - [lefthook](https://lefthook.dev/): git hooks (lint on pre-commit,
