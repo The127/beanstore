@@ -316,3 +316,35 @@ func TestIntegrationErrorClassification(t *testing.T) {
 	err = client.RemovePhysicalVolume(ctx, loop, RemovePhysicalVolumeOptions{})
 	assert.ErrorIs(t, err, ErrInUse, "removing a vg member")
 }
+
+func TestIntegrationDisplayPhysicalVolume(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	vgFor(t, loop)
+
+	output, err := client.DisplayPhysicalVolume(ctx, loop, DisplayPhysicalVolumeOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, output, string(loop))
+
+	output, err = client.DisplayPhysicalVolume(ctx, loop, DisplayPhysicalVolumeOptions{Maps: true})
+	require.NoError(t, err)
+	assert.Contains(t, output, string(loop))
+}
+
+func TestIntegrationScanPhysicalVolumes(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	vgFor(t, loop)
+
+	require.NoError(t, client.ScanPhysicalVolumes(ctx, ScanPhysicalVolumesOptions{Device: loop}))
+	require.NoError(t, client.ScanPhysicalVolumes(ctx, ScanPhysicalVolumesOptions{
+		Device:       loop,
+		Autoactivate: true,
+	}))
+}

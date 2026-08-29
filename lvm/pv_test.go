@@ -306,3 +306,49 @@ func TestListPhysicalVolumesWithSelect(t *testing.T) {
 	assert.Equal(t, "-S", args[len(args)-2])
 	assert.Equal(t, "pv_size > 500g", args[len(args)-1])
 }
+
+func TestDisplayPhysicalVolumeBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{output: []byte("  --- Physical volume ---\n")}
+	client := New(WithRunner(fake))
+
+	output, err := client.DisplayPhysicalVolume(t.Context(), "/dev/loop0", DisplayPhysicalVolumeOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "  --- Physical volume ---\n", output)
+	assert.Equal(t, []string{"pvdisplay", "/dev/loop0"}, fake.calls[0].Args())
+}
+
+func TestDisplayPhysicalVolumeMaps(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	_, err := client.DisplayPhysicalVolume(t.Context(), "/dev/loop0", DisplayPhysicalVolumeOptions{
+		Maps: true,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvdisplay", "-m", "/dev/loop0"}, fake.calls[0].Args())
+}
+
+func TestScanPhysicalVolumesBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ScanPhysicalVolumes(t.Context(), ScanPhysicalVolumesOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvscan", "--cache"}, fake.calls[0].Args())
+}
+
+func TestScanPhysicalVolumesDeviceAndAutoactivate(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ScanPhysicalVolumes(t.Context(), ScanPhysicalVolumesOptions{
+		Device:       "/dev/loop0",
+		Autoactivate: true,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvscan", "--cache", "-aay", "/dev/loop0"}, fake.calls[0].Args())
+}

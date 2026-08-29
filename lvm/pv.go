@@ -302,3 +302,64 @@ func parsePVReport(output []byte) ([]PhysicalVolume, error) {
 
 	return volumes, nil
 }
+
+// DisplayPhysicalVolumeOptions configures DisplayPhysicalVolume.
+type DisplayPhysicalVolumeOptions struct {
+	CommonOptions
+	// Maps includes the mapping of physical extents to lvs.
+	Maps bool
+}
+
+// DisplayPhysicalVolume returns lvm's human readable description of the
+// given pv. For machine readable data use ListPhysicalVolumes.
+func (c *Client) DisplayPhysicalVolume(ctx context.Context, device Device, opts DisplayPhysicalVolumeOptions) (string, error) {
+	if opts.Autobackup != nil {
+		return "", errAutobackupNotSupported
+	}
+
+	cmd := c.command("pvdisplay", opts.CommonOptions)
+	if opts.Maps {
+		cmd = cmd.Append("-m")
+	}
+	cmd = cmd.Append(string(device))
+
+	output, err := c.run(ctx, cmd)
+	if err != nil {
+		return "", fmt.Errorf("displaying physical volume %s: %w", device, err)
+	}
+
+	return string(output), nil
+}
+
+// ScanPhysicalVolumesOptions configures ScanPhysicalVolumes.
+type ScanPhysicalVolumesOptions struct {
+	CommonOptions
+	// Device records only the pv on this device as online, all devices
+	// when empty.
+	Device Device
+	// Autoactivate activates the lvs of any vg that became complete.
+	Autoactivate bool
+}
+
+// ScanPhysicalVolumes updates lvm's runtime state of online pvs, the
+// pvscan --cache form. Plain pv listing is ListPhysicalVolumes' job.
+func (c *Client) ScanPhysicalVolumes(ctx context.Context, opts ScanPhysicalVolumesOptions) error {
+	if opts.Autobackup != nil {
+		return errAutobackupNotSupported
+	}
+
+	cmd := c.command("pvscan", opts.CommonOptions).Append("--cache")
+	if opts.Autoactivate {
+		cmd = cmd.Append("-aay")
+	}
+	if opts.Device != "" {
+		cmd = cmd.Append(string(opts.Device))
+	}
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("scanning physical volumes: %w", err)
+	}
+
+	return nil
+}
