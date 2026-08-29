@@ -301,9 +301,41 @@ func TestRemoveLogicalVolumeBuildsCommand(t *testing.T) {
 
 	require.NoError(t, client.RemoveLogicalVolume(t.Context(), Name("vg0/vol1"), RemoveLogicalVolumeOptions{}))
 	require.NoError(t, client.RemoveLogicalVolume(t.Context(), Select("lv_tags = {gone}"), RemoveLogicalVolumeOptions{Force: true}))
+	require.NoError(t, client.RemoveLogicalVolume(t.Context(), Name("vg0/vol1"), RemoveLogicalVolumeOptions{NoHistory: true}))
 
 	assert.Equal(t, []string{"lvremove", "vg0/vol1"}, fake.calls[0].Args())
 	assert.Equal(t, []string{"lvremove", "-f", "-S", "lv_tags = {gone}"}, fake.calls[1].Args())
+	assert.Equal(t, []string{"lvremove", "--nohistory", "vg0/vol1"}, fake.calls[2].Args())
+}
+
+func TestListLogicalVolumesAllAndHistory(t *testing.T) {
+	fake := &fakeRunner{output: []byte(`{
+		"report": [{"lv": [
+			{"lv_name": "[pool0_tdata]", "lv_uuid": "uuid-d", "vg_name": "vg0",
+			 "lv_size": "536870912", "lv_attr": "Twi-ao----", "lv_tags": "",
+			 "pool_lv": "", "origin": "", "lv_path": "", "lv_dm_path": "",
+			 "data_percent": "", "metadata_percent": "",
+			 "lv_active": "", "lv_layout": "linear"},
+			{"lv_name": "-vol9", "lv_uuid": "", "vg_name": "vg0",
+			 "lv_size": "", "lv_attr": "-hi-------", "lv_tags": "",
+			 "pool_lv": "pool0", "origin": "", "lv_path": "", "lv_dm_path": "",
+			 "data_percent": "", "metadata_percent": "",
+			 "lv_active": "", "lv_layout": ""}
+		]}], "log": []}`)}
+	client := New(WithRunner(fake))
+
+	lvs, err := client.ListLogicalVolumes(t.Context(), ListLogicalVolumesOptions{
+		All:     true,
+		History: true,
+	})
+
+	require.NoError(t, err)
+	assert.Contains(t, fake.calls[0].Args(), "-a")
+	assert.Contains(t, fake.calls[0].Args(), "-H")
+	require.Len(t, lvs, 2)
+	assert.Equal(t, "[pool0_tdata]", lvs[0].Name)
+	assert.Equal(t, "-vol9", lvs[1].Name)
+	assert.Zero(t, lvs[1].SizeBytes)
 }
 
 func TestChangeLogicalVolumeBuildsCommand(t *testing.T) {

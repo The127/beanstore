@@ -634,6 +634,15 @@ func TestIntegrationThinVolumeLifecycle(t *testing.T) {
 	require.Len(t, pools, 1)
 	assert.Contains(t, pools[0].Layout, "pool")
 
+	all, err := client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{VG: vg, All: true})
+	require.NoError(t, err)
+	names := make([]string, 0, len(all))
+	for _, lv := range all {
+		names = append(names, lv.Name)
+	}
+	assert.Contains(t, names, "[pool0_tdata]")
+	assert.Contains(t, names, "[pool0_tmeta]")
+
 	require.NoError(t, client.RemoveLogicalVolume(ctx, Name(vg+"/vol1"), RemoveLogicalVolumeOptions{Force: true}))
 
 	lvs, err = client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{VG: vg, Select: "lv_name = vol1"})

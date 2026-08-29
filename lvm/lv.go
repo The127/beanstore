@@ -457,6 +457,12 @@ type ListLogicalVolumesOptions struct {
 	VG string
 	// Select filters the report by lvm selection criteria.
 	Select Select
+	// All includes internal lvs like thin pool data and metadata,
+	// reported with bracketed names.
+	All bool
+	// History includes removed lvs recorded while lvm.conf enables
+	// record_lvs_history, reported with size zero.
+	History bool
 }
 
 // ListLogicalVolumes reports all lvs visible to the client.
@@ -473,6 +479,12 @@ func (c *Client) ListLogicalVolumes(ctx context.Context, opts ListLogicalVolumes
 		"-o", "lv_name,lv_uuid,vg_name,lv_size,lv_attr,lv_tags,pool_lv,origin,"+
 			"lv_path,lv_dm_path,data_percent,metadata_percent,lv_active,lv_layout",
 	)
+	if opts.All {
+		cmd = cmd.Append("-a")
+	}
+	if opts.History {
+		cmd = cmd.Append("-H")
+	}
 	if opts.Select != "" {
 		cmd = cmd.Append("-S", string(opts.Select))
 	}
@@ -493,6 +505,9 @@ type RemoveLogicalVolumeOptions struct {
 	CommonOptions
 	// Force removes active and in use lvs without confirmation.
 	Force bool
+	// NoHistory skips recording the removed lvs even while lvm.conf
+	// enables record_lvs_history.
+	NoHistory bool
 }
 
 // RemoveLogicalVolume removes the lvs the target selects: a Name of the
@@ -505,6 +520,9 @@ func (c *Client) RemoveLogicalVolume(ctx context.Context, target Selector, opts 
 	cmd := c.command("lvremove", opts.CommonOptions)
 	if opts.Force {
 		cmd = cmd.Append("-f")
+	}
+	if opts.NoHistory {
+		cmd = cmd.Append("--nohistory")
 	}
 
 	cmd, err := appendSelector(cmd, target, "")
@@ -552,9 +570,13 @@ func parseLVReport(output []byte) ([]LogicalVolume, error) {
 
 	var volumes []LogicalVolume
 	for _, lv := range flattenLVReport(report) {
-		size, err := strconv.ParseUint(lv.Size, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("parsing size of %s/%s: %w", lv.VG, lv.Name, err)
+		// historical lvs report no size
+		size := uint64(0)
+		if lv.Size != "" {
+			size, err = strconv.ParseUint(lv.Size, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing size of %s/%s: %w", lv.VG, lv.Name, err)
+			}
 		}
 
 		dataPercent, err := parsePercent(lv.DataPercent)
