@@ -239,3 +239,25 @@ func TestRenameLogicalVolumeBuildsCommand(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"lvrename", "vg0", "vol1", "vol2"}, fake.calls[0].Args())
 }
+
+func TestDisplayLogicalVolumeBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{output: []byte("  --- Logical volume ---\n")}
+	client := New(WithRunner(fake))
+
+	output, err := client.DisplayLogicalVolume(t.Context(), "vg0/vol1", DisplayLogicalVolumeOptions{Maps: true})
+
+	require.NoError(t, err)
+	assert.Equal(t, "  --- Logical volume ---\n", output)
+	assert.Equal(t, []string{"lvdisplay", "-m", "vg0/vol1"}, fake.calls[0].Args())
+}
+
+func TestScanLogicalVolumesBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.ScanLogicalVolumes(t.Context(), ScanLogicalVolumesOptions{}))
+	require.NoError(t, client.ScanLogicalVolumes(t.Context(), ScanLogicalVolumesOptions{All: true}))
+
+	assert.Equal(t, []string{"lvscan"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"lvscan", "-a"}, fake.calls[1].Args())
+}

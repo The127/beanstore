@@ -682,6 +682,12 @@ func TestIntegrationLogicalVolumeResizeAndRename(t *testing.T) {
 
 	require.NoError(t, client.RenameLogicalVolume(ctx, vg, "vol1", "vol2", RenameLogicalVolumeOptions{}))
 	assert.Equal(t, uint64(64<<20), lvByName(t, client, vg, "vol2").SizeBytes)
+
+	output, err := client.DisplayLogicalVolume(ctx, vg+"/vol2", DisplayLogicalVolumeOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, output, "vol2")
+
+	require.NoError(t, client.ScanLogicalVolumes(ctx, ScanLogicalVolumesOptions{}))
 }
 
 func lvByName(t *testing.T, client *Client, vg, name string) LogicalVolume {

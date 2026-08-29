@@ -52,6 +52,8 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `ReduceLogicalVolume` | `lvreduce` |
 | `ResizeLogicalVolume` | `lvresize` |
 | `RenameLogicalVolume` | `lvrename` |
+| `DisplayLogicalVolume` | `lvdisplay` |
+| `ScanLogicalVolumes` | `lvscan` |
 
 Every operation takes an options struct. Its fields cover the command's
 flags, and the embedded `CommonOptions` override the client environment

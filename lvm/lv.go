@@ -499,3 +499,61 @@ func (c *Client) RenameLogicalVolume(ctx context.Context, vg, oldName, newName s
 
 	return nil
 }
+
+// DisplayLogicalVolumeOptions configures DisplayLogicalVolume.
+type DisplayLogicalVolumeOptions struct {
+	CommonOptions
+	// Maps includes the mapping of logical to physical extents.
+	Maps bool
+}
+
+// DisplayLogicalVolume returns lvm's human readable description of the
+// given vg/lv or vg, of all lvs when the name is empty. For machine
+// readable data use ListLogicalVolumes.
+func (c *Client) DisplayLogicalVolume(ctx context.Context, name string, opts DisplayLogicalVolumeOptions) (string, error) {
+	if opts.Autobackup != nil {
+		return "", errAutobackupNotSupported
+	}
+
+	cmd := c.command("lvdisplay", opts.CommonOptions)
+	if opts.Maps {
+		cmd = cmd.Append("-m")
+	}
+	if name != "" {
+		cmd = cmd.Append(name)
+	}
+
+	output, err := c.run(ctx, cmd)
+	if err != nil {
+		return "", fmt.Errorf("displaying logical volume %s: %w", name, err)
+	}
+
+	return string(output), nil
+}
+
+// ScanLogicalVolumesOptions configures ScanLogicalVolumes.
+type ScanLogicalVolumesOptions struct {
+	CommonOptions
+	// All also scans internal lvs like thin pool data and metadata.
+	All bool
+}
+
+// ScanLogicalVolumes rescans all devices for lvs. Plain lv listing is
+// ListLogicalVolumes' job.
+func (c *Client) ScanLogicalVolumes(ctx context.Context, opts ScanLogicalVolumesOptions) error {
+	if opts.Autobackup != nil {
+		return errAutobackupNotSupported
+	}
+
+	cmd := c.command("lvscan", opts.CommonOptions)
+	if opts.All {
+		cmd = cmd.Append("-a")
+	}
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("scanning logical volumes: %w", err)
+	}
+
+	return nil
+}
