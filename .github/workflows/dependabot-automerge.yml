@@ -17,7 +17,7 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      # majors stay open for human review; minors and patches merge once
+      # majors stay open for human review, minors and patches merge once
       # the required ci check passes
       - name: enable auto-merge
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'

@@ -3,8 +3,8 @@
 ## Reporting a vulnerability
 
 Please report vulnerabilities privately via
-[GitHub private vulnerability reporting](https://github.com/The127/beanstore/security/advisories/new)
-— do not open a public issue for security problems.
+[GitHub private vulnerability reporting](https://github.com/The127/beanstore/security/advisories/new).
+Do not open a public issue for security problems.
 
 You can expect a timely response. Please include enough
 detail to reproduce the issue (affected component, setup, steps).
@@ -13,7 +13,7 @@ There is no bug bounty program.
 
 ## Supported versions
 
-beanstore is in early development and has no releases yet; only the `main`
+beanstore is in early development and has no releases yet. Only the `main`
 branch is supported. Once versioned releases exist, this section will state
 which release lines receive security fixes.
 
