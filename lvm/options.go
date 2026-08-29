@@ -9,7 +9,8 @@ func Bool(value bool) *bool {
 // CommonOptions are accepted by every operation and override the
 // client's environment for one call.
 type CommonOptions struct {
-	// Devices overrides the client's device scoping.
+	// Devices overrides the client's device scoping. An empty non-nil
+	// slice disables scoping for the call.
 	Devices []Device
 	// Autobackup overrides the client's autobackup setting. Only valid
 	// on operations that change metadata.

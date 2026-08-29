@@ -354,13 +354,12 @@ func TestScanPhysicalVolumesDeviceAndAutoactivate(t *testing.T) {
 }
 
 func TestCheckPhysicalVolumeBuildsCommand(t *testing.T) {
-	fake := &fakeRunner{output: []byte("Found label on /dev/loop0\n")}
+	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	output, err := client.CheckPhysicalVolume(t.Context(), "/dev/loop0", CheckPhysicalVolumeOptions{})
+	err := client.CheckPhysicalVolume(t.Context(), "/dev/loop0", CheckPhysicalVolumeOptions{})
 
 	require.NoError(t, err)
-	assert.Equal(t, "Found label on /dev/loop0\n", output)
 	assert.Equal(t, []string{"pvck", "/dev/loop0"}, fake.calls[0].Args())
 }
 

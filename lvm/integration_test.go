@@ -357,11 +357,12 @@ func TestIntegrationCheckAndDumpPhysicalVolume(t *testing.T) {
 	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
 	vgFor(t, loop)
 
-	output, err := client.CheckPhysicalVolume(ctx, loop, CheckPhysicalVolumeOptions{})
-	require.NoError(t, err)
-	assert.Contains(t, output, "Found label")
+	require.NoError(t, client.CheckPhysicalVolume(ctx, loop, CheckPhysicalVolumeOptions{}))
 
-	output, err = client.DumpPhysicalVolume(ctx, loop, DumpHeaders, DumpPhysicalVolumeOptions{})
+	// lvm 2.03.16 rejects --devices scoped dumps, disable scoping
+	output, err := client.DumpPhysicalVolume(ctx, loop, DumpHeaders, DumpPhysicalVolumeOptions{
+		CommonOptions: CommonOptions{Devices: []Device{}},
+	})
 	require.NoError(t, err)
 	assert.Contains(t, output, "label_header")
 }

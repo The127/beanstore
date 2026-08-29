@@ -369,21 +369,21 @@ type CheckPhysicalVolumeOptions struct {
 	CommonOptions
 }
 
-// CheckPhysicalVolume checks the lvm metadata on the given device and
-// returns lvm's findings.
-func (c *Client) CheckPhysicalVolume(ctx context.Context, device Device, opts CheckPhysicalVolumeOptions) (string, error) {
+// CheckPhysicalVolume checks the lvm metadata on the given device.
+// Findings go to lvm's log, the returned error is the verdict.
+func (c *Client) CheckPhysicalVolume(ctx context.Context, device Device, opts CheckPhysicalVolumeOptions) error {
 	if opts.Autobackup != nil {
-		return "", errAutobackupNotSupported
+		return errAutobackupNotSupported
 	}
 
 	cmd := c.command("pvck", opts.CommonOptions).Append(string(device))
 
-	output, err := c.run(ctx, cmd)
+	_, err := c.run(ctx, cmd)
 	if err != nil {
-		return "", fmt.Errorf("checking physical volume %s: %w", device, err)
+		return fmt.Errorf("checking physical volume %s: %w", device, err)
 	}
 
-	return string(output), nil
+	return nil
 }
 
 // DumpKind selects what DumpPhysicalVolume prints.
