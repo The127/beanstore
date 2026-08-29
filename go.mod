@@ -8,6 +8,7 @@ replace github.com/The127/beanstore/client => ./client
 
 require (
 	github.com/The127/beanstore/client v0.0.0-00010101000000-000000000000
+	github.com/mdlayher/sdnotify v1.0.0
 	google.golang.org/grpc v1.83.2
 )
 
