@@ -9,7 +9,9 @@ import (
 )
 
 // Client issues lvm2 commands against the local node. Client options
-// set environment defaults, CommonOptions on a call override them.
+// set environment defaults, CommonOptions on a call override them. A
+// Client is safe for concurrent use, lvm itself serializes conflicting
+// commands through its own locking.
 type Client struct {
 	runner     runner.Runner
 	devices    []Device
