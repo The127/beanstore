@@ -807,28 +807,44 @@ func (c *Client) DeactivateLogicalVolume(ctx context.Context, target Selector, o
 // ExtendLogicalVolumeOptions configures ExtendLogicalVolume.
 type ExtendLogicalVolumeOptions struct {
 	CommonOptions
-	// Relative grows by the given size instead of to it.
-	Relative bool
 	// ResizeFilesystem also grows the filesystem on the lv.
 	ResizeFilesystem bool
 	// PoolMetadataSizeBytes also grows a thin pool's metadata lv to the
 	// given size.
 	PoolMetadataSizeBytes uint64
+	// Stripes sets the stripe count of the new extents, lvm's default
+	// when zero.
+	Stripes uint64
+	// StripeSizeBytes sets the stripe size of the new extents, lvm's
+	// default when zero.
+	StripeSizeBytes uint64
+	// Allocation sets the extent allocation policy.
+	Allocation AllocationPolicy
 }
 
-// ExtendLogicalVolume grows the given vg/lv to or by the given size.
-func (c *Client) ExtendLogicalVolume(ctx context.Context, name string, sizeBytes uint64, opts ExtendLogicalVolumeOptions) error {
-	size := strconv.FormatUint(sizeBytes, 10) + "b"
-	if opts.Relative {
-		size = "+" + size
+// ExtendLogicalVolume grows the given vg/lv to the given size, or by
+// it with GrowBy.
+func (c *Client) ExtendLogicalVolume(ctx context.Context, name string, size Size, opts ExtendLogicalVolumeOptions) error {
+	if size.direction() < 0 {
+		return errors.New("extending a logical volume cannot use ShrinkBy")
 	}
 
-	cmd := c.metadataCommand("lvextend", opts.CommonOptions).Append("-L", size)
+	flag, value := size.sizeArg()
+	cmd := c.metadataCommand("lvextend", opts.CommonOptions).Append(flag, value)
 	if opts.ResizeFilesystem {
 		cmd = cmd.Append("-r")
 	}
 	if opts.PoolMetadataSizeBytes > 0 {
 		cmd = cmd.Append("--poolmetadatasize", strconv.FormatUint(opts.PoolMetadataSizeBytes, 10)+"b")
+	}
+	if opts.Stripes > 0 {
+		cmd = cmd.Append("-i", strconv.FormatUint(opts.Stripes, 10))
+	}
+	if opts.StripeSizeBytes > 0 {
+		cmd = cmd.Append("-I", strconv.FormatUint(opts.StripeSizeBytes, 10)+"b")
+	}
+	if opts.Allocation != "" {
+		cmd = cmd.Append("--alloc", string(opts.Allocation))
 	}
 	cmd = cmd.Append(name)
 
@@ -840,25 +856,44 @@ func (c *Client) ExtendLogicalVolume(ctx context.Context, name string, sizeBytes
 	return nil
 }
 
+// ExtendLogicalVolumeByPolicyOptions configures
+// ExtendLogicalVolumeByPolicy.
+type ExtendLogicalVolumeByPolicyOptions struct {
+	CommonOptions
+}
+
+// ExtendLogicalVolumeByPolicy grows the given vg/lv by the autoextend
+// policy configured in lvm.conf, doing nothing when the lv is below
+// its autoextend threshold.
+func (c *Client) ExtendLogicalVolumeByPolicy(ctx context.Context, name string, opts ExtendLogicalVolumeByPolicyOptions) error {
+	cmd := c.metadataCommand("lvextend", opts.CommonOptions).Append("--usepolicies", name)
+
+	_, err := c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("extending logical volume %s by policy: %w", name, err)
+	}
+
+	return nil
+}
+
 // ReduceLogicalVolumeOptions configures ReduceLogicalVolume.
 type ReduceLogicalVolumeOptions struct {
 	CommonOptions
-	// Relative shrinks by the given size instead of to it.
-	Relative bool
 	// ResizeFilesystem also shrinks the filesystem on the lv first.
 	ResizeFilesystem bool
 }
 
-// ReduceLogicalVolume shrinks the given vg/lv to or by the given size,
-// destroying data beyond the new end. The confirmation lvm asks for is
-// answered, calling this already expresses the intent.
-func (c *Client) ReduceLogicalVolume(ctx context.Context, name string, sizeBytes uint64, opts ReduceLogicalVolumeOptions) error {
-	size := strconv.FormatUint(sizeBytes, 10) + "b"
-	if opts.Relative {
-		size = "-" + size
+// ReduceLogicalVolume shrinks the given vg/lv to the given size, or by
+// it with ShrinkBy, destroying data beyond the new end. The
+// confirmation lvm asks for is answered, calling this already
+// expresses the intent.
+func (c *Client) ReduceLogicalVolume(ctx context.Context, name string, size Size, opts ReduceLogicalVolumeOptions) error {
+	if size.direction() > 0 {
+		return errors.New("reducing a logical volume cannot use GrowBy")
 	}
 
-	cmd := c.metadataCommand("lvreduce", opts.CommonOptions).Append("-L", size, "-f")
+	flag, value := size.sizeArg()
+	cmd := c.metadataCommand("lvreduce", opts.CommonOptions).Append(flag, value, "-f")
 	if opts.ResizeFilesystem {
 		cmd = cmd.Append("-r")
 	}
@@ -877,16 +912,43 @@ type ResizeLogicalVolumeOptions struct {
 	CommonOptions
 	// ResizeFilesystem also resizes the filesystem on the lv.
 	ResizeFilesystem bool
+	// PoolMetadataSizeBytes also grows a thin pool's metadata lv to the
+	// given size.
+	PoolMetadataSizeBytes uint64
+	// Stripes sets the stripe count of new extents, lvm's default when
+	// zero.
+	Stripes uint64
+	// StripeSizeBytes sets the stripe size of new extents, lvm's
+	// default when zero.
+	StripeSizeBytes uint64
+	// Allocation sets the extent allocation policy.
+	Allocation AllocationPolicy
 }
 
 // ResizeLogicalVolume resizes the given vg/lv to the given absolute
-// size. Shrinking prompts and fails, use ReduceLogicalVolume to shrink.
-func (c *Client) ResizeLogicalVolume(ctx context.Context, name string, sizeBytes uint64, opts ResizeLogicalVolumeOptions) error {
-	cmd := c.metadataCommand("lvresize", opts.CommonOptions).Append(
-		"-L", strconv.FormatUint(sizeBytes, 10)+"b",
-	)
+// size, GrowBy and ShrinkBy are refused. Shrinking prompts and fails,
+// use ReduceLogicalVolume to shrink.
+func (c *Client) ResizeLogicalVolume(ctx context.Context, name string, size Size, opts ResizeLogicalVolumeOptions) error {
+	if size.direction() != 0 {
+		return errors.New("resizing a logical volume takes an absolute size")
+	}
+
+	flag, value := size.sizeArg()
+	cmd := c.metadataCommand("lvresize", opts.CommonOptions).Append(flag, value)
 	if opts.ResizeFilesystem {
 		cmd = cmd.Append("-r")
+	}
+	if opts.PoolMetadataSizeBytes > 0 {
+		cmd = cmd.Append("--poolmetadatasize", strconv.FormatUint(opts.PoolMetadataSizeBytes, 10)+"b")
+	}
+	if opts.Stripes > 0 {
+		cmd = cmd.Append("-i", strconv.FormatUint(opts.Stripes, 10))
+	}
+	if opts.StripeSizeBytes > 0 {
+		cmd = cmd.Append("-I", strconv.FormatUint(opts.StripeSizeBytes, 10)+"b")
+	}
+	if opts.Allocation != "" {
+		cmd = cmd.Append("--alloc", string(opts.Allocation))
 	}
 	cmd = cmd.Append(name)
 

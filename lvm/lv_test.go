@@ -383,12 +383,16 @@ func TestExtendLogicalVolumeBuildsCommands(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	require.NoError(t, client.ExtendLogicalVolume(t.Context(), "vg0/vol1", 128<<20, ExtendLogicalVolumeOptions{}))
-	require.NoError(t, client.ExtendLogicalVolume(t.Context(), "vg0/vol1", 32<<20, ExtendLogicalVolumeOptions{
-		Relative:              true,
+	require.NoError(t, client.ExtendLogicalVolume(t.Context(), "vg0/vol1", Bytes(128<<20), ExtendLogicalVolumeOptions{}))
+	require.NoError(t, client.ExtendLogicalVolume(t.Context(), "vg0/vol1", GrowBy(Bytes(32<<20)), ExtendLogicalVolumeOptions{
 		ResizeFilesystem:      true,
 		PoolMetadataSizeBytes: 8 << 20,
+		Stripes:               2,
+		StripeSizeBytes:       64 << 10,
+		Allocation:            AllocationAnywhere,
 	}))
+	require.NoError(t, client.ExtendLogicalVolume(t.Context(), "vg0/vol1", GrowBy(Percent(100, PercentFree)), ExtendLogicalVolumeOptions{}))
+	require.NoError(t, client.ExtendLogicalVolume(t.Context(), "vg0/vol1", Extents(50), ExtendLogicalVolumeOptions{}))
 
 	assert.Equal(t, []string{"lvextend", "-L", "134217728b", "vg0/vol1"}, fake.calls[0].Args())
 	assert.Equal(t, []string{
@@ -396,33 +400,57 @@ func TestExtendLogicalVolumeBuildsCommands(t *testing.T) {
 		"-L", "+33554432b",
 		"-r",
 		"--poolmetadatasize", "8388608b",
+		"-i", "2",
+		"-I", "65536b",
+		"--alloc", "anywhere",
 		"vg0/vol1",
 	}, fake.calls[1].Args())
+	assert.Equal(t, []string{"lvextend", "-l", "+100%FREE", "vg0/vol1"}, fake.calls[2].Args())
+	assert.Equal(t, []string{"lvextend", "-l", "50", "vg0/vol1"}, fake.calls[3].Args())
+
+	err := client.ExtendLogicalVolume(t.Context(), "vg0/vol1", ShrinkBy(Bytes(1)), ExtendLogicalVolumeOptions{})
+	assert.ErrorContains(t, err, "cannot use ShrinkBy")
+	assert.Len(t, fake.calls, 4)
+}
+
+func TestExtendLogicalVolumeByPolicyBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.ExtendLogicalVolumeByPolicy(t.Context(), "vg0/pool0", ExtendLogicalVolumeByPolicyOptions{}))
+
+	assert.Equal(t, []string{"lvextend", "--usepolicies", "vg0/pool0"}, fake.calls[0].Args())
 }
 
 func TestReduceLogicalVolumeBuildsCommands(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	require.NoError(t, client.ReduceLogicalVolume(t.Context(), "vg0/vol1", 64<<20, ReduceLogicalVolumeOptions{}))
-	require.NoError(t, client.ReduceLogicalVolume(t.Context(), "vg0/vol1", 16<<20, ReduceLogicalVolumeOptions{
-		Relative: true,
-	}))
+	require.NoError(t, client.ReduceLogicalVolume(t.Context(), "vg0/vol1", Bytes(64<<20), ReduceLogicalVolumeOptions{}))
+	require.NoError(t, client.ReduceLogicalVolume(t.Context(), "vg0/vol1", ShrinkBy(Bytes(16<<20)), ReduceLogicalVolumeOptions{}))
 
 	assert.Equal(t, []string{"lvreduce", "-L", "67108864b", "-f", "vg0/vol1"}, fake.calls[0].Args())
 	assert.Equal(t, []string{"lvreduce", "-L", "-16777216b", "-f", "vg0/vol1"}, fake.calls[1].Args())
+
+	err := client.ReduceLogicalVolume(t.Context(), "vg0/vol1", GrowBy(Bytes(1)), ReduceLogicalVolumeOptions{})
+	assert.ErrorContains(t, err, "cannot use GrowBy")
+	assert.Len(t, fake.calls, 2)
 }
 
 func TestResizeLogicalVolumeBuildsCommand(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	err := client.ResizeLogicalVolume(t.Context(), "vg0/vol1", 256<<20, ResizeLogicalVolumeOptions{
+	err := client.ResizeLogicalVolume(t.Context(), "vg0/vol1", Bytes(256<<20), ResizeLogicalVolumeOptions{
 		ResizeFilesystem: true,
 	})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"lvresize", "-L", "268435456b", "-r", "vg0/vol1"}, fake.calls[0].Args())
+
+	err = client.ResizeLogicalVolume(t.Context(), "vg0/vol1", GrowBy(Bytes(1)), ResizeLogicalVolumeOptions{})
+	assert.ErrorContains(t, err, "absolute size")
+	assert.Len(t, fake.calls, 1)
 }
 
 func TestRenameLogicalVolumeBuildsCommand(t *testing.T) {

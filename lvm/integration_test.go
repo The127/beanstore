@@ -671,14 +671,18 @@ func TestIntegrationLogicalVolumeResizeAndRename(t *testing.T) {
 	require.NoError(t, client.CreateThinPool(ctx, vg, "pool0", 256<<20, CreateThinPoolOptions{}))
 	require.NoError(t, client.CreateThinVolume(ctx, vg, "pool0", "vol1", 64<<20, CreateThinVolumeOptions{}))
 
-	require.NoError(t, client.ExtendLogicalVolume(ctx, vg+"/vol1", 32<<20, ExtendLogicalVolumeOptions{Relative: true}))
+	require.NoError(t, client.ExtendLogicalVolume(ctx, vg+"/vol1", GrowBy(Bytes(32<<20)), ExtendLogicalVolumeOptions{}))
 	assert.Equal(t, uint64(96<<20), lvByName(t, client, vg, "vol1").SizeBytes)
 
-	require.NoError(t, client.ResizeLogicalVolume(ctx, vg+"/vol1", 128<<20, ResizeLogicalVolumeOptions{}))
+	require.NoError(t, client.ResizeLogicalVolume(ctx, vg+"/vol1", Bytes(128<<20), ResizeLogicalVolumeOptions{}))
 	assert.Equal(t, uint64(128<<20), lvByName(t, client, vg, "vol1").SizeBytes)
 
-	require.NoError(t, client.ReduceLogicalVolume(ctx, vg+"/vol1", 64<<20, ReduceLogicalVolumeOptions{}))
+	require.NoError(t, client.ReduceLogicalVolume(ctx, vg+"/vol1", Bytes(64<<20), ReduceLogicalVolumeOptions{}))
 	assert.Equal(t, uint64(64<<20), lvByName(t, client, vg, "vol1").SizeBytes)
+
+	require.NoError(t, client.CreateLogicalVolume(ctx, vg, "lv0", 32<<20, CreateLogicalVolumeOptions{}))
+	require.NoError(t, client.ExtendLogicalVolume(ctx, vg+"/lv0", GrowBy(Percent(100, PercentFree)), ExtendLogicalVolumeOptions{}))
+	assert.Greater(t, lvByName(t, client, vg, "lv0").SizeBytes, uint64(32<<20))
 
 	require.NoError(t, client.RenameLogicalVolume(ctx, vg, "vol1", "vol2", RenameLogicalVolumeOptions{}))
 	assert.Equal(t, uint64(64<<20), lvByName(t, client, vg, "vol2").SizeBytes)

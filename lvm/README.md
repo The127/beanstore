@@ -51,6 +51,7 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `ActivateLogicalVolume` | `lvchange -a y` |
 | `DeactivateLogicalVolume` | `lvchange -a n` |
 | `ExtendLogicalVolume` | `lvextend` |
+| `ExtendLogicalVolumeByPolicy` | `lvextend --usepolicies` |
 | `ReduceLogicalVolume` | `lvreduce` |
 | `ResizeLogicalVolume` | `lvresize` |
 | `RenameLogicalVolume` | `lvrename` |
