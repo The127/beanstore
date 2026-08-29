@@ -24,6 +24,12 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `ExtendVolumeGroup` | `vgextend` |
 | `ReduceVolumeGroup` | `vgreduce` |
 | `RenameVolumeGroup` | `vgrename` |
+| `ChangeVolumeGroup` | `vgchange` |
+| `ActivateVolumeGroup` | `vgchange -a y` |
+| `DeactivateVolumeGroup` | `vgchange -a n` |
+| `CheckVolumeGroup` | `vgck` |
+| `DisplayVolumeGroup` | `vgdisplay` |
+| `ScanVolumeGroups` | `vgscan` |
 
 Every operation takes an options struct. Its fields cover the command's
 flags, and the embedded `CommonOptions` override the client environment

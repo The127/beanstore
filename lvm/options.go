@@ -26,6 +26,11 @@ type Device string
 
 func (Device) isSelector() {}
 
+// Name addresses one object by its lvm name, like a vg.
+type Name string
+
+func (Name) isSelector() {}
+
 // Select addresses the objects matching lvm selection criteria, see
 // lvmreport(7).
 type Select string

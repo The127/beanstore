@@ -188,3 +188,121 @@ func TestRenameVolumeGroupBuildsCommand(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"vgrename", "vg0", "vg1"}, fake.calls[0].Args())
 }
+
+func TestChangeVolumeGroupCombinesProperties(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ChangeVolumeGroup(t.Context(), Name("vg0"), ChangeVolumeGroupOptions{
+		AddTags:            []string{"fast"},
+		RemoveTags:         []string{"old"},
+		Resizeable:         Bool(false),
+		MaxLogicalVolumes:  ptrUint64(10),
+		MaxPhysicalVolumes: ptrUint64(0),
+		ExtentSizeBytes:    8388608,
+		RegenerateUUID:     true,
+		SetAutoactivation:  Bool(false),
+		Allocation:         AllocationCling,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"vgchange",
+		"--addtag", "fast",
+		"--deltag", "old",
+		"-x", "n",
+		"-l", "10",
+		"-p", "0",
+		"-s", "8388608b",
+		"-u",
+		"--setautoactivation", "n",
+		"--alloc", "cling",
+		"vg0",
+	}, fake.calls[0].Args())
+}
+
+func ptrUint64(v uint64) *uint64 {
+	return &v
+}
+
+func TestChangeVolumeGroupBySelect(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ChangeVolumeGroup(t.Context(), Select("vg_tags = {beanstore}"), ChangeVolumeGroupOptions{
+		AddTags: []string{"seen"},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"vgchange", "--addtag", "seen", "-S", "vg_tags = {beanstore}",
+	}, fake.calls[0].Args())
+}
+
+func TestChangeVolumeGroupRequiresAProperty(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ChangeVolumeGroup(t.Context(), Name("vg0"), ChangeVolumeGroupOptions{})
+
+	assert.ErrorContains(t, err, "at least one property")
+	assert.Empty(t, fake.calls)
+}
+
+func TestActivateVolumeGroupBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ActivateVolumeGroup(t.Context(), Name("vg0"), ActivateVolumeGroupOptions{
+		IgnoreActivationSkip: true,
+		Mode:                 ActivationDegraded,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"vgchange", "-a", "y", "-K", "--activationmode", "degraded", "vg0",
+	}, fake.calls[0].Args())
+}
+
+func TestDeactivateVolumeGroupBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.DeactivateVolumeGroup(t.Context(), All, DeactivateVolumeGroupOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"vgchange", "-a", "n"}, fake.calls[0].Args())
+}
+
+func TestCheckVolumeGroupBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.CheckVolumeGroup(t.Context(), "vg0", CheckVolumeGroupOptions{}))
+	require.NoError(t, client.CheckVolumeGroup(t.Context(), "", CheckVolumeGroupOptions{}))
+
+	assert.Equal(t, []string{"vgck", "vg0"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"vgck"}, fake.calls[1].Args())
+}
+
+func TestDisplayVolumeGroupBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{output: []byte("  --- Volume group ---\n")}
+	client := New(WithRunner(fake))
+
+	output, err := client.DisplayVolumeGroup(t.Context(), "vg0", DisplayVolumeGroupOptions{Short: true})
+
+	require.NoError(t, err)
+	assert.Equal(t, "  --- Volume group ---\n", output)
+	assert.Equal(t, []string{"vgdisplay", "-s", "vg0"}, fake.calls[0].Args())
+}
+
+func TestScanVolumeGroupsBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.ScanVolumeGroups(t.Context(), ScanVolumeGroupsOptions{}))
+	require.NoError(t, client.ScanVolumeGroups(t.Context(), ScanVolumeGroupsOptions{MkNodes: true}))
+
+	assert.Equal(t, []string{"vgscan"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"vgscan", "--mknodes"}, fake.calls[1].Args())
+}

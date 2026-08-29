@@ -166,7 +166,7 @@ func (c *Client) ChangePhysicalVolume(ctx context.Context, target Selector, opts
 		return errors.New("changing a physical volume requires at least one property")
 	}
 
-	cmd, err := appendSelector(cmd, target)
+	cmd, err := appendSelector(cmd, target, "-a")
 	if err != nil {
 		return err
 	}

@@ -441,3 +441,56 @@ func TestIntegrationVolumeGroupRename(t *testing.T) {
 
 	require.NoError(t, client.RenameVolumeGroup(ctx, renamed, name, RenameVolumeGroupOptions{}))
 }
+
+func TestIntegrationVolumeGroupChangeAndSelect(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	name := vgFor(t, loop)
+
+	require.NoError(t, client.ChangeVolumeGroup(ctx, Name(name), ChangeVolumeGroupOptions{
+		AddTags: []string{"retiring"},
+	}))
+
+	require.NoError(t, client.ChangeVolumeGroup(ctx, Select("vg_tags = {retiring}"), ChangeVolumeGroupOptions{
+		AddTags:    []string{"drained"},
+		RemoveTags: []string{"retiring"},
+	}))
+
+	vgs, err := client.ListVolumeGroups(ctx, ListVolumeGroupsOptions{Select: "vg_tags = {drained}"})
+	require.NoError(t, err)
+	require.Len(t, vgs, 1)
+	assert.Equal(t, name, vgs[0].Name)
+
+	require.NoError(t, client.ChangeVolumeGroup(ctx, Name(name), ChangeVolumeGroupOptions{
+		Resizeable: Bool(false),
+	}))
+	err = client.ExtendVolumeGroup(ctx, name, []Device{loop}, ExtendVolumeGroupOptions{})
+	require.Error(t, err, "extending a non resizeable vg must fail")
+	t.Logf("non resizeable stderr for the harvest: %v", err)
+	require.NoError(t, client.ChangeVolumeGroup(ctx, Name(name), ChangeVolumeGroupOptions{
+		Resizeable: Bool(true),
+	}))
+}
+
+func TestIntegrationVolumeGroupActivationCheckDisplayScan(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	name := vgFor(t, loop)
+
+	require.NoError(t, client.DeactivateVolumeGroup(ctx, Name(name), DeactivateVolumeGroupOptions{}))
+	require.NoError(t, client.ActivateVolumeGroup(ctx, Name(name), ActivateVolumeGroupOptions{}))
+
+	require.NoError(t, client.CheckVolumeGroup(ctx, name, CheckVolumeGroupOptions{}))
+
+	output, err := client.DisplayVolumeGroup(ctx, name, DisplayVolumeGroupOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, output, name)
+
+	require.NoError(t, client.ScanVolumeGroups(ctx, ScanVolumeGroupsOptions{}))
+}

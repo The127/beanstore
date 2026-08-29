@@ -83,19 +83,27 @@ func (c *Client) run(ctx context.Context, cmd *runner.Cmd) ([]byte, error) {
 	return output, nil
 }
 
-func appendSelector(cmd *runner.Cmd, target Selector) (*runner.Cmd, error) {
+// appendSelector renders the target. The all flag differs per command:
+// pv commands spell it -a, vg commands treat no positional as all.
+func appendSelector(cmd *runner.Cmd, target Selector, allFlag string) (*runner.Cmd, error) {
 	switch t := target.(type) {
 	case Device:
+		return cmd.Append(string(t)), nil
+
+	case Name:
 		return cmd.Append(string(t)), nil
 
 	case Select:
 		return cmd.Append("-S", string(t)), nil
 
 	case allSelector:
-		return cmd.Append("-a"), nil
+		if allFlag == "" {
+			return cmd, nil
+		}
+		return cmd.Append(allFlag), nil
 
 	default:
-		return nil, fmt.Errorf("nil selector, want Device, Select or All")
+		return nil, fmt.Errorf("nil selector, want Device, Name, Select or All")
 	}
 }
 
