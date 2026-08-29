@@ -11,6 +11,8 @@ var (
 	// ErrNotFound reports an addressed object that does not exist or is
 	// not visible to lvm.
 	ErrNotFound = errors.New("lvm object not found")
+	// ErrAlreadyExists reports a name collision with an existing object.
+	ErrAlreadyExists = errors.New("lvm object already exists")
 	// ErrInUse reports an object refused because something else uses it.
 	ErrInUse = errors.New("lvm object in use")
 	// ErrPermission reports missing privileges for lvm's devices, locks
@@ -50,6 +52,7 @@ var stderrPatterns = []struct {
 	{": device not found", ErrNotFound},
 	{"is not in devices file", ErrNotFound},
 	{`" not found`, ErrNotFound},
+	{"already exists", ErrAlreadyExists},
 	{"is used by VG", ErrInUse},
 	{"without -ff", ErrInUse},
 }

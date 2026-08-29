@@ -29,6 +29,7 @@ func TestHarvestedStderrClassification(t *testing.T) {
 		{"untracked device", 5, "Cannot use /dev/loop0: device is not in devices file", ErrNotFound},
 		{"absent vg", 5, `Volume group "absent-vg" not found
   Cannot process volume group absent-vg`, ErrNotFound},
+		{"duplicate vg name", 5, "A volume group called beanstore-vgtest-2772 already exists.", ErrAlreadyExists},
 		{"pvcreate on vg member", 5, `Can't initialize physical volume "/dev/loop0" of volume group "errtest-vg" without -ff`, ErrInUse},
 		{"pvremove on vg member", 5, "PV /dev/loop0 is used by VG errtest-vg so please use vgreduce first.", ErrInUse},
 		{"unprivileged", 5, "/run/lock/lvm/P_global:aux: open failed: Permission denied", ErrPermission},
@@ -54,6 +55,7 @@ func TestUnclassifiedFailureStillCarriesDetails(t *testing.T) {
 	assert.Equal(t, 5, lvmErr.ExitCode)
 	assert.Equal(t, "something entirely new", lvmErr.Stderr)
 	assert.False(t, errors.Is(err, ErrNotFound))
+	assert.False(t, errors.Is(err, ErrAlreadyExists))
 	assert.False(t, errors.Is(err, ErrInUse))
 	assert.False(t, errors.Is(err, ErrPermission))
 	assert.False(t, errors.Is(err, ErrInvalidCommand))

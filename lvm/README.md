@@ -70,7 +70,7 @@ for _, pv := range pvs {
 ## Errors
 
 Failed commands return an `*lvm.Error` with exit code and stderr. Known
-failures also match `errors.Is` sentinels: `ErrNotFound`, `ErrInUse`,
+failures also match `errors.Is` sentinels: `ErrNotFound`, `ErrAlreadyExists`, `ErrInUse`,
 `ErrPermission`, `ErrInvalidCommand`.
 
 ## Notes

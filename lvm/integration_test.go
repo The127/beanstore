@@ -387,8 +387,7 @@ func TestIntegrationVolumeGroupLifecycle(t *testing.T) {
 	assert.Equal(t, vgs[0].SizeBytes, vgs[0].FreeBytes)
 
 	err = client.CreateVolumeGroup(ctx, name, []Device{loop}, CreateVolumeGroupOptions{})
-	require.Error(t, err, "duplicate vg name must fail")
-	t.Logf("duplicate vgcreate stderr for the harvest: %v", err)
+	assert.ErrorIs(t, err, ErrAlreadyExists, "duplicate vg name")
 
 	require.NoError(t, client.RemoveVolumeGroup(ctx, name, RemoveVolumeGroupOptions{}))
 
