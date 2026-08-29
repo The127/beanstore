@@ -18,6 +18,8 @@ import (
 	"github.com/The127/beanstore/internal/api"
 	"github.com/The127/beanstore/internal/config"
 	"github.com/The127/beanstore/internal/logging"
+	"github.com/The127/beanstore/internal/storage"
+	"github.com/The127/beanstore/lvm"
 )
 
 const defaultConfigPath = "/etc/beanstore/config.yaml"
@@ -59,6 +61,12 @@ func run() error {
 		Level: cfg.LogLevel,
 	}))
 	ctx = logging.WithLogger(ctx, logger)
+
+	lvmClient := lvm.New()
+	err = storage.Setup(ctx, lvmClient, cfg)
+	if err != nil {
+		return fmt.Errorf("preparing storage: %w", err)
+	}
 
 	// the notifier is nil outside systemd, all methods no-op on nil
 	notifier, err := sdnotify.New()
