@@ -1,48 +1,48 @@
 # lvm
 
-A Go library for lvm2, built on the lvm command line interface with JSON
-reporting. Since lvm2 removed liblvm2app, the CLI is the stable
-programmatic interface lvm2 offers, and this library wraps it with typed
-results, exact command construction, and testability.
+Go client for lvm2, wrapping the `lvm` command line, which is the stable
+programmatic interface since lvm2 removed liblvm2app. Requires lvm2
+2.03.10 or newer for json_std reports. MIT licensed, part of the
+[beanstore](https://github.com/The127/beanstore) repository.
 
-Part of [beanstore](https://github.com/The127/beanstore) but MIT licensed
-as its own module, usable by any project.
+## Supported operations
 
-## Install
-
-```bash
-go get github.com/The127/beanstore/lvm
-```
+| Go                     | lvm        |
+| ---------------------- | ---------- |
+| `CreatePhysicalVolume` | `pvcreate` |
+| `ListPhysicalVolumes`  | `pvs`      |
+| `RemovePhysicalVolume` | `pvremove` |
 
 ## Usage
 
 ```go
 client := lvm.New()
 
-err := client.CreateThinVolume(ctx, "vg0", "pool0", "vol1", 1<<30, "state.creating")
+err := client.CreatePhysicalVolume(ctx, "/dev/sdb")
+if err != nil {
+	return err
+}
 
-volumes, err := client.ListVolumes(ctx, "vg0")
+pvs, err := client.ListPhysicalVolumes(ctx)
+if err != nil {
+	return err
+}
 
-err = client.AddTag(ctx, "vg0", "vol1", "state.ready")
-err = client.RemoveTag(ctx, "vg0", "vol1", "state.creating")
-
-err = client.RemoveVolume(ctx, "vg0", "vol1")
-```
-
-The process needs permission to run the `lvm` binary, which in practice
-means root or an equivalent capability set.
-
-## Testing
-
-Commands run through the `Runner` interface. Inject your own with
-`lvm.NewWithRunner` to fake lvm in tests, or to route commands through
-sudo, a container, or a remote shell:
-
-```go
-type Runner interface {
-    Run(ctx context.Context, args ...string) ([]byte, error)
+for _, pv := range pvs {
+	fmt.Printf("%s: %d bytes free\n", pv.Device, pv.FreeBytes)
 }
 ```
+
+## Notes
+
+- lvm needs read and write access to the target block devices, to the
+  device-mapper control node `/dev/mapper/control`, and to its lock and
+  metadata directories under `/run/lock/lvm` and `/etc/lvm`. Run the
+  process with those permissions or route commands through sudo.
+- Hosts using the lvm devices file hide untracked devices from most
+  commands, while `pvcreate` silently adds its target to the file.
+  `lvm.New(lvm.WithDevices("/dev/loop0"))` scopes a client to explicit
+  devices, leaving the devices file untouched.
 
 ## License
 
