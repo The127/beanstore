@@ -258,8 +258,10 @@ func parseLVReport(output []byte) ([]LogicalVolume, error) {
 			DevicePath:      lv.DMPath,
 			DataPercent:     dataPercent,
 			MetadataPercent: metadataPercent,
-			Active:          lv.Active == "1",
-			Layout:          splitList(lv.Layout),
+			// lv_active reports "active" as a string on some lvm
+			// versions and 0/1 with --binary on others
+			Active: lv.Active == "1" || lv.Active == "active",
+			Layout: splitList(lv.Layout),
 		})
 	}
 

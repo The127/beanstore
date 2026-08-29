@@ -77,13 +77,13 @@ func TestListLogicalVolumesBuildsCommandAndParses(t *testing.T) {
 			 "lv_size": "536870912", "lv_attr": "twi-aotz--", "lv_tags": "",
 			 "pool_lv": "", "origin": "", "lv_path": "", "lv_dm_path": "/dev/mapper/vg0-pool0",
 			 "data_percent": "7.42", "metadata_percent": "10.94",
-			 "lv_active": "1", "lv_layout": "pool,thin"},
+			 "lv_active": "active", "lv_layout": "pool,thin"},
 			{"lv_name": "vol1", "lv_uuid": "uuid-v", "vg_name": "vg0",
 			 "lv_size": "1073741824", "lv_attr": "Vwi---tz--",
 			 "lv_tags": "state.creating,beanstore", "pool_lv": "pool0",
 			 "origin": "", "lv_path": "/dev/vg0/vol1", "lv_dm_path": "/dev/mapper/vg0-vol1",
 			 "data_percent": "", "metadata_percent": "",
-			 "lv_active": "0", "lv_layout": "thin,sparse"}
+			 "lv_active": "", "lv_layout": "thin,sparse"}
 		]}], "log": []}`)}
 	client := New(WithRunner(fake))
 
