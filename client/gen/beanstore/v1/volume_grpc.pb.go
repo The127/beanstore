@@ -22,6 +22,8 @@ const (
 	VolumeService_CreateVolume_FullMethodName  = "/beanstore.v1.VolumeService/CreateVolume"
 	VolumeService_ListVolumes_FullMethodName   = "/beanstore.v1.VolumeService/ListVolumes"
 	VolumeService_GetNodeStatus_FullMethodName = "/beanstore.v1.VolumeService/GetNodeStatus"
+	VolumeService_Attach_FullMethodName        = "/beanstore.v1.VolumeService/Attach"
+	VolumeService_Detach_FullMethodName        = "/beanstore.v1.VolumeService/Detach"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -38,6 +40,12 @@ type VolumeServiceClient interface {
 	ListVolumes(ctx context.Context, in *ListVolumesRequest, opts ...grpc.CallOption) (*ListVolumesResponse, error)
 	// GetNodeStatus reports the node's capacity and versions.
 	GetNodeStatus(ctx context.Context, in *GetNodeStatusRequest, opts ...grpc.CallOption) (*GetNodeStatusResponse, error)
+	// Attach exposes a READY volume as a local block device. Refused in
+	// any other state.
+	Attach(ctx context.Context, in *AttachRequest, opts ...grpc.CallOption) (*AttachResponse, error)
+	// Detach removes an ATTACHED volume's block device. Refused in any
+	// other state, and while the device is in use.
+	Detach(ctx context.Context, in *DetachRequest, opts ...grpc.CallOption) (*DetachResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -78,6 +86,26 @@ func (c *volumeServiceClient) GetNodeStatus(ctx context.Context, in *GetNodeStat
 	return out, nil
 }
 
+func (c *volumeServiceClient) Attach(ctx context.Context, in *AttachRequest, opts ...grpc.CallOption) (*AttachResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AttachResponse)
+	err := c.cc.Invoke(ctx, VolumeService_Attach_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *volumeServiceClient) Detach(ctx context.Context, in *DetachRequest, opts ...grpc.CallOption) (*DetachResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DetachResponse)
+	err := c.cc.Invoke(ctx, VolumeService_Detach_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -92,6 +120,12 @@ type VolumeServiceServer interface {
 	ListVolumes(context.Context, *ListVolumesRequest) (*ListVolumesResponse, error)
 	// GetNodeStatus reports the node's capacity and versions.
 	GetNodeStatus(context.Context, *GetNodeStatusRequest) (*GetNodeStatusResponse, error)
+	// Attach exposes a READY volume as a local block device. Refused in
+	// any other state.
+	Attach(context.Context, *AttachRequest) (*AttachResponse, error)
+	// Detach removes an ATTACHED volume's block device. Refused in any
+	// other state, and while the device is in use.
+	Detach(context.Context, *DetachRequest) (*DetachResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -110,6 +144,12 @@ func (UnimplementedVolumeServiceServer) ListVolumes(context.Context, *ListVolume
 }
 func (UnimplementedVolumeServiceServer) GetNodeStatus(context.Context, *GetNodeStatusRequest) (*GetNodeStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetNodeStatus not implemented")
+}
+func (UnimplementedVolumeServiceServer) Attach(context.Context, *AttachRequest) (*AttachResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Attach not implemented")
+}
+func (UnimplementedVolumeServiceServer) Detach(context.Context, *DetachRequest) (*DetachResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Detach not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -186,6 +226,42 @@ func _VolumeService_GetNodeStatus_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_Attach_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).Attach(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_Attach_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).Attach(ctx, req.(*AttachRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VolumeService_Detach_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetachRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).Detach(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_Detach_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).Detach(ctx, req.(*DetachRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -204,6 +280,14 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNodeStatus",
 			Handler:    _VolumeService_GetNodeStatus_Handler,
+		},
+		{
+			MethodName: "Attach",
+			Handler:    _VolumeService_Attach_Handler,
+		},
+		{
+			MethodName: "Detach",
+			Handler:    _VolumeService_Detach_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

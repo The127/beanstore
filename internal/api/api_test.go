@@ -181,6 +181,51 @@ func TestCreateVolumeValidation(t *testing.T) {
 	}
 }
 
+const readyLV = `{"report": [{"lv": [
+	{"lv_name": "vol-1", "lv_uuid": "uuid-1", "vg_name": "vg0",
+	 "lv_size": "1073741824", "lv_attr": "Vwi---tz--",
+	 "lv_tags": "beanstore.state=ready", "pool_lv": "pool0", "origin": "",
+	 "lv_path": "", "lv_dm_path": "", "data_percent": "",
+	 "metadata_percent": "", "lv_active": "", "lv_layout": "thin,sparse"}
+]}], "log": []}`
+
+const attachedLV = `{"report": [{"lv": [
+	{"lv_name": "vol-1", "lv_uuid": "uuid-1", "vg_name": "vg0",
+	 "lv_size": "1073741824", "lv_attr": "Vwi-a-tz--",
+	 "lv_tags": "beanstore.state=attached", "pool_lv": "pool0", "origin": "",
+	 "lv_path": "/dev/vg0/vol-1", "lv_dm_path": "", "data_percent": "1.00",
+	 "metadata_percent": "", "lv_active": "active",
+	 "lv_layout": "thin,sparse"}
+]}], "log": []}`
+
+func TestAttachReturnsDevicePath(t *testing.T) {
+	volumes, _ := testServer(t, &fakeRunner{outputs: []string{readyLV, attachedLV}})
+
+	response, err := volumes.Attach(t.Context(), &beanstorev1.AttachRequest{VolumeId: "vol-1"})
+
+	require.NoError(t, err)
+	assert.Equal(t, "/dev/vg0/vol-1", response.DevicePath)
+}
+
+func TestAttachErrorCodes(t *testing.T) {
+	volumes, _ := testServer(t, &fakeRunner{outputs: []string{attachedLV, noLVs}})
+
+	_, err := volumes.Attach(t.Context(), &beanstorev1.AttachRequest{VolumeId: "vol-1"})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.ErrorContains(t, err, "in state attached")
+
+	_, err = volumes.Attach(t.Context(), &beanstorev1.AttachRequest{VolumeId: "vol-9"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestDetachOnReadyVolumeFails(t *testing.T) {
+	volumes, _ := testServer(t, &fakeRunner{outputs: []string{readyLV}})
+
+	_, err := volumes.Detach(t.Context(), &beanstorev1.DetachRequest{VolumeId: "vol-1"})
+
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
 func TestGetOperationStates(t *testing.T) {
 	fake := &fakeRunner{}
 	_, operationsServer := testServer(t, fake)

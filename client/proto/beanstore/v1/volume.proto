@@ -16,6 +16,14 @@ service VolumeService {
 
   // GetNodeStatus reports the node's capacity and versions.
   rpc GetNodeStatus(GetNodeStatusRequest) returns (GetNodeStatusResponse);
+
+  // Attach exposes a READY volume as a local block device. Refused in
+  // any other state.
+  rpc Attach(AttachRequest) returns (AttachResponse);
+
+  // Detach removes an ATTACHED volume's block device. Refused in any
+  // other state, and while the device is in use.
+  rpc Detach(DetachRequest) returns (DetachResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -51,6 +59,20 @@ message ListVolumesRequest {}
 message ListVolumesResponse {
   repeated Volume volumes = 1;
 }
+
+message AttachRequest {
+  string volume_id = 1;
+}
+
+message AttachResponse {
+  string device_path = 1;
+}
+
+message DetachRequest {
+  string volume_id = 1;
+}
+
+message DetachResponse {}
 
 message GetNodeStatusRequest {}
 

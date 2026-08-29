@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -39,6 +40,28 @@ type Volume struct {
 	State     State
 	SizeBytes uint64
 	UsedBytes uint64
+	// Path is the block device path, empty while inactive.
+	Path string
+}
+
+// ErrNotFound reports that no beanstore volume with the given id
+// exists on this node.
+var ErrNotFound = errors.New("volume does not exist")
+
+// WrongStateError reports a verb hitting a volume in a state the verb
+// does not accept.
+type WrongStateError struct {
+	Volume string
+	Found  State
+}
+
+func (e *WrongStateError) Error() string {
+	found := string(e.Found)
+	if e.Found == StateUnknown {
+		found = "unknown"
+	}
+
+	return fmt.Sprintf("volume %s is in state %s", e.Volume, found)
 }
 
 // ListVolumes scans the configured pool for beanstore volumes. LVs
@@ -65,6 +88,7 @@ func ListVolumes(ctx context.Context, client *lvm.Client, cfg config.Config) ([]
 			State:     state,
 			SizeBytes: lv.SizeBytes,
 			UsedBytes: uint64(float64(lv.SizeBytes) * lv.DataPercent / 100),
+			Path:      lv.Path,
 		})
 	}
 
@@ -105,6 +129,96 @@ func VolumeExists(ctx context.Context, client *lvm.Client, cfg config.Config, id
 	}
 
 	return len(lvs) > 0, nil
+}
+
+// GetVolume reads one beanstore volume. Foreign lvs do not count,
+// looking one up returns ErrNotFound.
+func GetVolume(ctx context.Context, client *lvm.Client, cfg config.Config, id string) (Volume, error) {
+	lvs, err := client.ListLogicalVolumes(ctx, lvm.ListLogicalVolumesOptions{
+		VG:     cfg.VolumeGroup,
+		Select: lvm.Select("lv_name = " + id),
+	})
+	if err != nil {
+		return Volume{}, fmt.Errorf("looking up volume %s: %w", id, err)
+	}
+	if len(lvs) == 0 {
+		return Volume{}, fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+
+	state, owned := stateOf(lvs[0].Tags)
+	if !owned {
+		return Volume{}, fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+
+	return Volume{
+		ID:        lvs[0].Name,
+		State:     state,
+		SizeBytes: lvs[0].SizeBytes,
+		UsedBytes: uint64(float64(lvs[0].SizeBytes) * lvs[0].DataPercent / 100),
+		Path:      lvs[0].Path,
+	}, nil
+}
+
+// Attach activates a READY volume and returns its block device path.
+// The tag flips before activation, so a crash leaves an attached
+// volume that recovery re-activates.
+func Attach(ctx context.Context, client *lvm.Client, cfg config.Config, id string) (string, error) {
+	volume, err := GetVolume(ctx, client, cfg, id)
+	if err != nil {
+		return "", err
+	}
+	if volume.State != StateReady {
+		return "", &WrongStateError{Volume: id, Found: volume.State}
+	}
+
+	name := lvm.Name(cfg.VolumeGroup + "/" + id)
+	err = client.ChangeLogicalVolume(ctx, name, lvm.ChangeLogicalVolumeOptions{
+		AddTags:    []string{StateTag(StateAttached)},
+		RemoveTags: []string{StateTag(StateReady)},
+	})
+	if err != nil {
+		return "", fmt.Errorf("attaching volume %s: %w", id, err)
+	}
+
+	err = client.ActivateLogicalVolume(ctx, name, lvm.ActivateLogicalVolumeOptions{})
+	if err != nil {
+		return "", fmt.Errorf("activating volume %s: %w", id, err)
+	}
+
+	volume, err = GetVolume(ctx, client, cfg, id)
+	if err != nil {
+		return "", err
+	}
+
+	return volume.Path, nil
+}
+
+// Detach deactivates an ATTACHED volume. Deactivation runs first, so
+// an in-use device fails the call and the volume stays attached.
+func Detach(ctx context.Context, client *lvm.Client, cfg config.Config, id string) error {
+	volume, err := GetVolume(ctx, client, cfg, id)
+	if err != nil {
+		return err
+	}
+	if volume.State != StateAttached {
+		return &WrongStateError{Volume: id, Found: volume.State}
+	}
+
+	name := lvm.Name(cfg.VolumeGroup + "/" + id)
+	err = client.DeactivateLogicalVolume(ctx, name, lvm.DeactivateLogicalVolumeOptions{})
+	if err != nil {
+		return fmt.Errorf("deactivating volume %s: %w", id, err)
+	}
+
+	err = client.ChangeLogicalVolume(ctx, name, lvm.ChangeLogicalVolumeOptions{
+		AddTags:    []string{StateTag(StateReady)},
+		RemoveTags: []string{StateTag(StateAttached)},
+	})
+	if err != nil {
+		return fmt.Errorf("detaching volume %s: %w", id, err)
+	}
+
+	return nil
 }
 
 // NodeStatus is the node's capacity as read from the pool and its

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"runtime/debug"
 
@@ -133,6 +134,52 @@ func (s *volumeServiceServer) ListVolumes(ctx context.Context, _ *beanstorev1.Li
 	}
 
 	return response, nil
+}
+
+func (s *volumeServiceServer) Attach(ctx context.Context, request *beanstorev1.AttachRequest) (*beanstorev1.AttachResponse, error) {
+	if !volumeIDPattern.MatchString(request.VolumeId) {
+		return nil, status.Error(codes.InvalidArgument, "volume_id is not a valid lv name")
+	}
+
+	path, err := storage.Attach(ctx, s.lvm, s.cfg, request.VolumeId)
+	if err != nil {
+		return nil, volumeError(ctx, err, "attaching failed")
+	}
+
+	return &beanstorev1.AttachResponse{DevicePath: path}, nil
+}
+
+func (s *volumeServiceServer) Detach(ctx context.Context, request *beanstorev1.DetachRequest) (*beanstorev1.DetachResponse, error) {
+	if !volumeIDPattern.MatchString(request.VolumeId) {
+		return nil, status.Error(codes.InvalidArgument, "volume_id is not a valid lv name")
+	}
+
+	err := storage.Detach(ctx, s.lvm, s.cfg, request.VolumeId)
+	if err != nil {
+		return nil, volumeError(ctx, err, "detaching failed")
+	}
+
+	return &beanstorev1.DetachResponse{}, nil
+}
+
+// volumeError maps storage errors onto grpc codes. Internal failures
+// are logged and answered without detail.
+func volumeError(ctx context.Context, err error, message string) error {
+	var wrongState *storage.WrongStateError
+	switch {
+	case errors.Is(err, storage.ErrNotFound):
+		return status.Error(codes.NotFound, "volume does not exist")
+
+	case errors.As(err, &wrongState):
+		return status.Error(codes.FailedPrecondition, wrongState.Error())
+
+	case errors.Is(err, lvm.ErrInUse):
+		return status.Error(codes.FailedPrecondition, "volume is in use")
+
+	default:
+		logging.FromContext(ctx).Error(message, "error", err)
+		return status.Error(codes.Internal, message)
+	}
 }
 
 func (s *volumeServiceServer) GetNodeStatus(ctx context.Context, _ *beanstorev1.GetNodeStatusRequest) (*beanstorev1.GetNodeStatusResponse, error) {
