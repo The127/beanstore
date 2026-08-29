@@ -1,5 +1,10 @@
 # beanstore
 
+[![ci](https://github.com/The127/beanstore/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/The127/beanstore/actions/workflows/ci.yml)
+[![coverage](https://codecov.io/gh/The127/beanstore/graph/badge.svg)](https://app.codecov.io/gh/The127/beanstore)
+[![server license: AGPL-3.0](https://img.shields.io/badge/server-AGPL--3.0-blue)](LICENSE)
+[![client license: MIT](https://img.shields.io/badge/client-MIT-green)](client/LICENSE)
+
 An LVM-based per-node storage API. beanstore manages thin logical volumes on
 the node it runs on and moves detached volumes between nodes — nothing more.
 
