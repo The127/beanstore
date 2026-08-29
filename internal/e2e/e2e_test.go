@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	"github.com/The127/beanstore/client"
 	beanstorev1 "github.com/The127/beanstore/client/gen/beanstore/v1"
 	"github.com/The127/beanstore/internal/api"
 	"github.com/The127/beanstore/internal/config"
@@ -233,6 +234,9 @@ func TestIntegrationDaemonLifecycle(t *testing.T) {
 	_, err = volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "vol-1"})
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 	assert.ErrorContains(t, err, "attached")
+	wrongState, ok := client.WrongState(err)
+	require.True(t, ok, "the structured detail crosses the wire")
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_ATTACHED, wrongState.Found)
 
 	_, err = volumes.DeleteVolume(ctx, &beanstorev1.DeleteVolumeRequest{
 		VolumeId:    "vol-1",

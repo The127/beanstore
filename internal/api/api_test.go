@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/The127/beanstore/client"
 	beanstorev1 "github.com/The127/beanstore/client/gen/beanstore/v1"
 	"github.com/The127/beanstore/internal/config"
 	"github.com/The127/beanstore/internal/operations"
@@ -213,6 +214,11 @@ func TestAttachErrorCodes(t *testing.T) {
 	_, err := volumes.Attach(t.Context(), &beanstorev1.AttachRequest{VolumeId: "vol-1"})
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 	assert.ErrorContains(t, err, "in state attached")
+
+	wrongState, ok := client.WrongState(err)
+	require.True(t, ok, "refusal carries the structured detail")
+	assert.Equal(t, "vol-1", wrongState.VolumeId)
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_ATTACHED, wrongState.Found)
 
 	_, err = volumes.Attach(t.Context(), &beanstorev1.AttachRequest{VolumeId: "vol-9"})
 	assert.Equal(t, codes.NotFound, status.Code(err))

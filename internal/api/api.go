@@ -267,7 +267,16 @@ func volumeError(ctx context.Context, err error, message string) error {
 		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.As(err, &wrongState):
-		return status.Error(codes.FailedPrecondition, wrongState.Error())
+		refusal := status.New(codes.FailedPrecondition, wrongState.Error())
+		detailed, detailErr := refusal.WithDetails(&beanstorev1.WrongState{
+			VolumeId: wrongState.Volume,
+			Found:    protoState(wrongState.Found),
+		})
+		if detailErr != nil {
+			return refusal.Err()
+		}
+
+		return detailed.Err()
 
 	case errors.Is(err, lvm.ErrInUse):
 		return status.Error(codes.FailedPrecondition, "volume is in use")

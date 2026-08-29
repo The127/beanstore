@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package beanstore.v1;
+
+import "beanstore/v1/volume.proto";
+
+option go_package = "github.com/The127/beanstore/client/gen/beanstore/v1;beanstorev1";
+
+// WrongState details a strict-state refusal: the verb found the volume
+// in a state it does not accept. Carried as a grpc error detail on
+// FAILED_PRECONDITION responses.
+message WrongState {
+  string volume_id = 1;
+  VolumeState found = 2;
+}
