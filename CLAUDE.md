@@ -19,6 +19,8 @@ not the other way around.
   it is non-obvious.
 - No em-dashes and no semicolons in prose: documents, comments, and commit
   messages. Semicolons in code only where Go syntax requires them.
+- Package doc comments live in a dedicated `doc.go` per package, never on
+  another file's package clause.
 - Use the justfile: `just ci` (lint + build + test over both modules) must
   pass before a commit. `just setup` prepares a fresh clone.
 

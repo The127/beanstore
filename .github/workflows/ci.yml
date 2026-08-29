@@ -38,6 +38,9 @@ jobs:
             exit 1
           fi
 
+      - name: doc comment check
+        run: bash scripts/check-doc-comments.sh
+
       - name: govulncheck server
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 

@@ -13,6 +13,7 @@ linters:
     - misspell
     - nilerr
     - nolintlint
+    - revive
     - unconvert
     - unparam
     - usestdlibvars
@@ -24,7 +25,7 @@ linters:
 
 formatters:
   enable:
-    - gofmt
+    - gofumpt
     - goimports
   settings:
     goimports:

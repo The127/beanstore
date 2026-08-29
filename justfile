@@ -33,6 +33,10 @@ fmt:
     golangci-lint fmt ./...
     cd client && golangci-lint fmt ./...
 
+# check that package doc comments live in doc.go
+doccheck:
+    bash scripts/check-doc-comments.sh
+
 # check prose style: no em-dashes outside the license files
 prose:
     #!/usr/bin/env bash
@@ -56,4 +60,4 @@ hooks:
     lefthook install
 
 # everything that must pass before a push
-ci: lint prose build test vuln
+ci: lint prose doccheck build test vuln

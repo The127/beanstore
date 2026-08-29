@@ -8,6 +8,8 @@ pre-commit:
       run: just lint-client
     - name: prose check
       run: just prose
+    - name: doc comment check
+      run: just doccheck
 
 commit-msg:
   jobs:
