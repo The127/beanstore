@@ -245,6 +245,9 @@ func (t *Transfers) Commit(ctx context.Context, transferID string, digest []byte
 			t.destroy(transferID)
 			return fmt.Errorf("syncing incoming volume: %w", err)
 		}
+		// deactivation refuses while the device is open
+		_ = session.device.Close()
+		session.device = nil
 	}
 
 	err := t.client.DeactivateLogicalVolume(ctx, lvm.Name(t.cfg.VolumeGroup+"/"+session.volumeID),
