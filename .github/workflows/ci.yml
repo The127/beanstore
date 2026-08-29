@@ -62,6 +62,11 @@ jobs:
           push: false
           archive: false
 
+      - name: proto generation check
+        run: |
+          buf generate
+          git diff --exit-code -- client/gen
+
       - name: prose check
         run: |
           emdash=$(printf '\342\200\224')

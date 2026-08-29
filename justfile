@@ -49,6 +49,11 @@ proto:
 proto-lint:
     buf lint
 
+# check that the generated grpc code matches the protos
+proto-check:
+    buf generate
+    git diff --exit-code -- client/gen
+
 # check that package doc comments live in doc.go
 doccheck:
     bash scripts/check-doc-comments.sh
@@ -82,4 +87,4 @@ hooks:
     lefthook install
 
 # everything that must pass before a push
-ci: lint proto-lint prose doccheck build test vuln
+ci: lint proto-lint proto-check prose doccheck build test vuln

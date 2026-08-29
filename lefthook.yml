@@ -11,6 +11,13 @@ pre-commit:
       run: just lint-lvm
     - name: prose check
       run: just prose
+    - name: proto generation check
+      glob:
+        - "client/proto/**"
+        - "client/gen/**"
+        - "buf.yaml"
+        - "buf.gen.yaml"
+      run: just proto-check
     - name: doc comment check
       run: just doccheck
 
