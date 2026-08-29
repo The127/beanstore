@@ -56,6 +56,16 @@ func TestListVolumeGroupsBuildsCommandAndParses(t *testing.T) {
 	vgs, err := client.ListVolumeGroups(t.Context(), ListVolumeGroupsOptions{})
 
 	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"vgs",
+		"--reportformat", "json",
+		"--units", "b",
+		"--nosuffix",
+		"--binary",
+		"-o", "vg_name,vg_uuid,vg_size,vg_free,vg_extent_size,vg_extent_count," +
+			"vg_free_count,pv_count,lv_count,snap_count,vg_missing_pv_count," +
+			"vg_tags,vg_attr,vg_exported,vg_partial,vg_shared,vg_autoactivation",
+	}, fake.calls[0].Args())
 	require.Len(t, vgs, 1)
 	assert.Equal(t, VolumeGroup{
 		Name:            "vg0",

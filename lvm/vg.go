@@ -93,7 +93,7 @@ func (c *Client) ListVolumeGroups(ctx context.Context, opts ListVolumeGroupsOpti
 		"--nosuffix",
 		"--binary",
 		"-o", "vg_name,vg_uuid,vg_size,vg_free,vg_extent_size,vg_extent_count,"+
-			"vg_free_count,pv_count,lnextv_count,snap_count,vg_missing_pv_count,"+
+			"vg_free_count,pv_count,lv_count,snap_count,vg_missing_pv_count,"+
 			"vg_tags,vg_attr,vg_exported,vg_partial,vg_shared,vg_autoactivation",
 	)
 	if opts.Select != "" {
