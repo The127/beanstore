@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: lint server
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.11.4
+
+      - name: lint client
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.11.4
+          working-directory: client
+
+      - name: build and test server
+        run: |
+          go build ./...
+          go test ./...
+
+      - name: build and test client
+        working-directory: client
+        run: |
+          go build ./...
+          go test ./...
