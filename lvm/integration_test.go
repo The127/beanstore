@@ -17,11 +17,15 @@ import (
 )
 
 // sudoRunner elevates commands so the test process itself can stay
-// unprivileged.
+// unprivileged. It rewrites the command through the real runner, so
+// RunError semantics and with them error classification are preserved.
 type sudoRunner struct{}
 
+var realRunner = runner.New()
+
 func (sudoRunner) Run(ctx context.Context, cmd *runner.Cmd) ([]byte, error) {
-	return sudoRun(ctx, append([]string{cmd.Name()}, cmd.Args()...)...)
+	elevated := runner.Command("sudo", append([]string{"-n", cmd.Name()}, cmd.Args()...)...)
+	return realRunner.Run(ctx, elevated)
 }
 
 func sudoRun(ctx context.Context, args ...string) ([]byte, error) {
