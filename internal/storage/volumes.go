@@ -45,6 +45,7 @@ type Volume struct {
 	Path string
 	// Origin names a snapshot's origin volume, empty otherwise.
 	Origin string
+	Active bool
 }
 
 // ErrNotFound reports that no beanstore volume with the given id
@@ -93,6 +94,7 @@ func ListVolumes(ctx context.Context, client *lvm.Client, cfg config.Config) ([]
 			UsedBytes: uint64(float64(lv.SizeBytes) * lv.DataPercent / 100),
 			Path:      lv.Path,
 			Origin:    lv.Origin,
+			Active:    lv.Active,
 		})
 	}
 
@@ -161,6 +163,7 @@ func GetVolume(ctx context.Context, client *lvm.Client, cfg config.Config, id st
 		UsedBytes: uint64(float64(lvs[0].SizeBytes) * lvs[0].DataPercent / 100),
 		Path:      lvs[0].Path,
 		Origin:    lvs[0].Origin,
+		Active:    lvs[0].Active,
 	}, nil
 }
 
@@ -198,7 +201,8 @@ func CreateSnapshot(ctx context.Context, client *lvm.Client, cfg config.Config, 
 	}
 
 	err = client.CreateThinSnapshot(ctx, cfg.VolumeGroup, originID, snapshotID, lvm.CreateThinSnapshotOptions{
-		AddTags: []string{StateTag(StateSnapshot)},
+		AddTags:    []string{StateTag(StateSnapshot)},
+		Permission: lvm.PermissionReadOnly,
 	})
 	if err != nil {
 		return fmt.Errorf("creating snapshot %s of %s: %w", snapshotID, originID, err)
@@ -208,14 +212,18 @@ func CreateSnapshot(ctx context.Context, client *lvm.Client, cfg config.Config, 
 }
 
 // DeleteSnapshot removes a snapshot. Only lvs in snapshot state
-// qualify, volumes are removed through their delete flow.
-func DeleteSnapshot(ctx context.Context, client *lvm.Client, cfg config.Config, id string) error {
+// qualify, volumes are removed through their delete flow. A snapshot
+// with a live export refuses.
+func DeleteSnapshot(ctx context.Context, client *lvm.Client, cfg config.Config, pins *ExportPins, id string) error {
 	snapshot, err := GetVolume(ctx, client, cfg, id)
 	if err != nil {
 		return err
 	}
 	if snapshot.State != StateSnapshot {
 		return &WrongStateError{Volume: id, Found: snapshot.State}
+	}
+	if pins.Pinned(id) {
+		return fmt.Errorf("%w: %s", ErrExportInProgress, id)
 	}
 
 	return RemoveVolume(ctx, client, cfg, id)
@@ -317,7 +325,7 @@ var ErrHasSnapshots = errors.New("volume has snapshots")
 // returns the snapshot ids to remove along with it. Without force,
 // existing snapshots refuse the delete. The tags persist before the
 // caller answers, a crash leaves deleting lvs that recovery removes.
-func MarkDeleting(ctx context.Context, client *lvm.Client, cfg config.Config, id string, force bool) ([]string, error) {
+func MarkDeleting(ctx context.Context, client *lvm.Client, cfg config.Config, pins *ExportPins, id string, force bool) ([]string, error) {
 	volume, err := GetVolume(ctx, client, cfg, id)
 	if err != nil {
 		return nil, err
@@ -332,6 +340,11 @@ func MarkDeleting(ctx context.Context, client *lvm.Client, cfg config.Config, id
 	}
 	if len(snapshots) > 0 && !force {
 		return nil, fmt.Errorf("%w: %s", ErrHasSnapshots, id)
+	}
+	for _, snapshot := range snapshots {
+		if pins.Pinned(snapshot) {
+			return nil, fmt.Errorf("%w: %s", ErrExportInProgress, snapshot)
+		}
 	}
 
 	for _, snapshot := range snapshots {

@@ -42,7 +42,21 @@ func Recover(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 			}
 			log.Info("re-activated attached volume", "volume", volume.ID)
 
-		case StateReady, StateSnapshot:
+		case StateSnapshot:
+			// a crash mid-export leaves the snapshot active
+			if !volume.Active {
+				continue
+			}
+			err = client.DeactivateLogicalVolume(ctx,
+				lvm.Name(cfg.VolumeGroup+"/"+volume.ID), lvm.DeactivateLogicalVolumeOptions{})
+			if err != nil {
+				log.Error("deactivating snapshot during recovery",
+					"volume", volume.ID, "error", err)
+				continue
+			}
+			log.Info("deactivated stray active snapshot", "volume", volume.ID)
+
+		case StateReady:
 
 		case StatePushing, StateIncoming, StateRetired, StateUnknown:
 			log.Warn("volume not covered by recovery",

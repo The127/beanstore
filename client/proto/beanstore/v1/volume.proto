@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package beanstore.v1;
 
+import "beanstore/v1/transfer.proto";
+
 option go_package = "github.com/The127/beanstore/client/gen/beanstore/v1;beanstorev1";
 
 // VolumeService is the per-node volume lifecycle API. Verbs are
@@ -40,6 +42,11 @@ service VolumeService {
   // DeleteSnapshot removes a SNAPSHOT. Volumes are removed with
   // DeleteVolume instead.
   rpc DeleteSnapshot(DeleteSnapshotRequest) returns (DeleteSnapshotResponse);
+
+  // Export streams a snapshot's content as frames followed by a
+  // trailer. Deleting the snapshot or force deleting its origin is
+  // refused while the export runs.
+  rpc Export(ExportRequest) returns (stream ExportResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -122,6 +129,17 @@ message ResizeVolumeRequest {
 }
 
 message ResizeVolumeResponse {}
+
+message ExportRequest {
+  string snapshot_id = 1;
+}
+
+message ExportResponse {
+  oneof content {
+    Frame frame = 1;
+    ExportTrailer trailer = 2;
+  }
+}
 
 message GetNodeStatusRequest {}
 

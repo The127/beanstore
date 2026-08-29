@@ -178,6 +178,69 @@ func TestIntegrationRecovery(t *testing.T) {
 	assert.NotEmpty(t, volumes[0].Path, "re-activated")
 }
 
+func TestIntegrationExport(t *testing.T) {
+	volumes, operations := daemon(t)
+	ctx := t.Context()
+
+	_, err := volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
+		VolumeId:    "vol-1",
+		SizeBytes:   16 << 20,
+		OperationId: "op-create",
+	})
+	require.NoError(t, err)
+	waitDone(t, operations, "op-create")
+
+	attach, err := volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "vol-1"})
+	require.NoError(t, err)
+
+	// a 2MiB pattern at the device start, the rest stays unwritten
+	pattern := filepath.Join(t.TempDir(), "pattern")
+	patternBytes := make([]byte, 2<<20)
+	for i := range patternBytes {
+		patternBytes[i] = byte(i % 251)
+	}
+	require.NoError(t, os.WriteFile(pattern, patternBytes, 0o600))
+	require.NoError(t, sudoRun(ctx, "dd", "if="+pattern, "of="+attach.DevicePath, "bs=1M", "conv=fsync"))
+
+	_, err = volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-1",
+	})
+	require.NoError(t, err)
+
+	stream, err := volumes.Export(ctx, &beanstorev1.ExportRequest{SnapshotId: "snap-1"})
+	require.NoError(t, err)
+
+	var trailer *beanstorev1.ExportTrailer
+	content := make([]byte, 16<<20)
+	for {
+		response, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("stream ended without trailer: %v", err)
+		}
+		if trailer = response.GetTrailer(); trailer != nil {
+			break
+		}
+
+		frame := response.GetFrame()
+		require.NotNil(t, frame)
+		copy(content[frame.Offset:], frame.Data)
+	}
+
+	assert.Equal(t, uint64(16<<20), trailer.SizeBytes)
+	assert.Equal(t, patternBytes, content[:2<<20], "the pattern survives the export")
+	assert.Equal(t, make([]byte, 1<<20), content[15<<20:], "unwritten space is zeros")
+
+	rebuilt := storage.NewDigestBuilder()
+	for offset := 0; offset < len(content); offset += storage.TransferChunkBytes {
+		rebuilt.AddChunk(content[offset : offset+storage.TransferChunkBytes])
+	}
+	assert.Equal(t, trailer.Digest, rebuilt.Sum(uint64(len(content))), "the digest matches the reassembled content")
+
+	_, err = volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
+	require.NoError(t, err, "the finished export released the snapshot")
+}
+
 func TestIntegrationDaemonLifecycle(t *testing.T) {
 	volumes, operations := daemon(t)
 	ctx := t.Context()

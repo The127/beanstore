@@ -28,6 +28,7 @@ const (
 	VolumeService_ResizeVolume_FullMethodName   = "/beanstore.v1.VolumeService/ResizeVolume"
 	VolumeService_CreateSnapshot_FullMethodName = "/beanstore.v1.VolumeService/CreateSnapshot"
 	VolumeService_DeleteSnapshot_FullMethodName = "/beanstore.v1.VolumeService/DeleteSnapshot"
+	VolumeService_Export_FullMethodName         = "/beanstore.v1.VolumeService/Export"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -62,6 +63,10 @@ type VolumeServiceClient interface {
 	// DeleteSnapshot removes a SNAPSHOT. Volumes are removed with
 	// DeleteVolume instead.
 	DeleteSnapshot(ctx context.Context, in *DeleteSnapshotRequest, opts ...grpc.CallOption) (*DeleteSnapshotResponse, error)
+	// Export streams a snapshot's content as frames followed by a
+	// trailer. Deleting the snapshot or force deleting its origin is
+	// refused while the export runs.
+	Export(ctx context.Context, in *ExportRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExportResponse], error)
 }
 
 type volumeServiceClient struct {
@@ -162,6 +167,25 @@ func (c *volumeServiceClient) DeleteSnapshot(ctx context.Context, in *DeleteSnap
 	return out, nil
 }
 
+func (c *volumeServiceClient) Export(ctx context.Context, in *ExportRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExportResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &VolumeService_ServiceDesc.Streams[0], VolumeService_Export_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ExportRequest, ExportResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type VolumeService_ExportClient = grpc.ServerStreamingClient[ExportResponse]
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -194,6 +218,10 @@ type VolumeServiceServer interface {
 	// DeleteSnapshot removes a SNAPSHOT. Volumes are removed with
 	// DeleteVolume instead.
 	DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error)
+	// Export streams a snapshot's content as frames followed by a
+	// trailer. Deleting the snapshot or force deleting its origin is
+	// refused while the export runs.
+	Export(*ExportRequest, grpc.ServerStreamingServer[ExportResponse]) error
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -230,6 +258,9 @@ func (UnimplementedVolumeServiceServer) CreateSnapshot(context.Context, *CreateS
 }
 func (UnimplementedVolumeServiceServer) DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteSnapshot not implemented")
+}
+func (UnimplementedVolumeServiceServer) Export(*ExportRequest, grpc.ServerStreamingServer[ExportResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method Export not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -414,6 +445,17 @@ func _VolumeService_DeleteSnapshot_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_Export_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ExportRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VolumeServiceServer).Export(m, &grpc.GenericServerStream[ExportRequest, ExportResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type VolumeService_ExportServer = grpc.ServerStreamingServer[ExportResponse]
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -458,7 +500,13 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VolumeService_DeleteSnapshot_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Export",
+			Handler:       _VolumeService_Export_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "beanstore/v1/volume.proto",
 }
 

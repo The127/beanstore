@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package beanstore.v1;
+
+option go_package = "github.com/The127/beanstore/client/gen/beanstore/v1;beanstorev1";
+
+// Frame is one chunk of volume content at its byte offset. Offsets
+// are strictly increasing and chunk aligned, the final frame may be
+// partial. All-zero chunks are never transmitted.
+message Frame {
+  uint64 offset = 1;
+  bytes data = 2;
+}
+
+// ExportTrailer ends an export stream. The digest is the sha256 over
+// the ordered per chunk sha256 hashes plus the size, so it is
+// independent of which chunks were transmitted.
+message ExportTrailer {
+  bytes digest = 1;
+  uint64 size_bytes = 2;
+}

@@ -46,6 +46,7 @@ func TestListVolumesScansTaggedLVs(t *testing.T) {
 		SizeBytes: 1 << 30,
 		UsedBytes: 1 << 28,
 		Path:      "/dev/vg0/vol-1",
+		Active:    true,
 	}, volumes[0])
 	assert.Equal(t, StateUnknown, volumes[1].State, "broken state tags are reported, not hidden")
 }
@@ -166,7 +167,7 @@ func TestMarkDeletingRetags(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{readyLV, noLVs, ""}}
 	client := lvm.New(lvm.WithRunner(fake))
 
-	snapshots, err := MarkDeleting(t.Context(), client, testConfig(), "vol-1", false)
+	snapshots, err := MarkDeleting(t.Context(), client, testConfig(), NewExportPins(), "vol-1", false)
 
 	require.NoError(t, err)
 	assert.Empty(t, snapshots)
@@ -179,7 +180,7 @@ func TestMarkDeletingRefusesAttached(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{attachedLV}}
 	client := lvm.New(lvm.WithRunner(fake))
 
-	_, err := MarkDeleting(t.Context(), client, testConfig(), "vol-1", false)
+	_, err := MarkDeleting(t.Context(), client, testConfig(), NewExportPins(), "vol-1", false)
 
 	var wrongState *WrongStateError
 	require.ErrorAs(t, err, &wrongState)
@@ -200,7 +201,7 @@ func TestMarkDeletingRefusesSnapshotsWithoutForce(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{readyLV, snapshotLV}}
 	client := lvm.New(lvm.WithRunner(fake))
 
-	_, err := MarkDeleting(t.Context(), client, testConfig(), "vol-1", false)
+	_, err := MarkDeleting(t.Context(), client, testConfig(), NewExportPins(), "vol-1", false)
 
 	assert.ErrorIs(t, err, ErrHasSnapshots)
 	assert.Len(t, fake.calls, 2, "no tags changed")
@@ -210,7 +211,7 @@ func TestMarkDeletingForceCascades(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{readyLV, snapshotLV, "", ""}}
 	client := lvm.New(lvm.WithRunner(fake))
 
-	snapshots, err := MarkDeleting(t.Context(), client, testConfig(), "vol-1", true)
+	snapshots, err := MarkDeleting(t.Context(), client, testConfig(), NewExportPins(), "vol-1", true)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"snap-1"}, snapshots)
@@ -249,7 +250,7 @@ func TestDeleteSnapshotRefusesVolumes(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{readyLV}}
 	client := lvm.New(lvm.WithRunner(fake))
 
-	err := DeleteSnapshot(t.Context(), client, testConfig(), "vol-1")
+	err := DeleteSnapshot(t.Context(), client, testConfig(), NewExportPins(), "vol-1")
 
 	var wrongState *WrongStateError
 	require.ErrorAs(t, err, &wrongState)
@@ -260,7 +261,7 @@ func TestDeleteSnapshotRemoves(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{snapshotLV, ""}}
 	client := lvm.New(lvm.WithRunner(fake))
 
-	err := DeleteSnapshot(t.Context(), client, testConfig(), "snap-1")
+	err := DeleteSnapshot(t.Context(), client, testConfig(), NewExportPins(), "snap-1")
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"lvremove", "-f", "vg0/snap-1"}, fake.calls[1].Args())

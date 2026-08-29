@@ -20,9 +20,10 @@ import (
 
 type volumeServiceServer struct {
 	beanstorev1.UnimplementedVolumeServiceServer
-	lvm *lvm.Client
-	cfg config.Config
-	ops *operations.Table
+	lvm  *lvm.Client
+	cfg  config.Config
+	ops  *operations.Table
+	pins *storage.ExportPins
 	// background outlives requests, long-running operations run on it.
 	background context.Context
 }
@@ -38,7 +39,7 @@ type operationServiceServer struct {
 func Register(ctx context.Context, server *grpc.Server, client *lvm.Client, cfg config.Config) {
 	ops := operations.NewTable()
 	beanstorev1.RegisterVolumeServiceServer(server, &volumeServiceServer{
-		lvm: client, cfg: cfg, ops: ops, background: ctx,
+		lvm: client, cfg: cfg, ops: ops, pins: storage.NewExportPins(), background: ctx,
 	})
 	beanstorev1.RegisterOperationServiceServer(server, &operationServiceServer{ops: ops})
 }
@@ -176,7 +177,7 @@ func (s *volumeServiceServer) DeleteVolume(ctx context.Context, request *beansto
 		return nil, status.Error(codes.AlreadyExists, "operation id already used")
 	}
 
-	snapshots, err := storage.MarkDeleting(ctx, s.lvm, s.cfg, request.VolumeId, request.Force)
+	snapshots, err := storage.MarkDeleting(ctx, s.lvm, s.cfg, s.pins, request.VolumeId, request.Force)
 	if err != nil {
 		s.ops.Fail(request.OperationId, err.Error())
 		return nil, volumeError(ctx, err, "deleting failed")
@@ -231,7 +232,7 @@ func (s *volumeServiceServer) DeleteSnapshot(ctx context.Context, request *beans
 		return nil, status.Error(codes.InvalidArgument, "snapshot_id is not a valid lv name")
 	}
 
-	err := storage.DeleteSnapshot(ctx, s.lvm, s.cfg, request.SnapshotId)
+	err := storage.DeleteSnapshot(ctx, s.lvm, s.cfg, s.pins, request.SnapshotId)
 	if err != nil {
 		return nil, volumeError(ctx, err, "deleting snapshot failed")
 	}
@@ -255,6 +256,75 @@ func (s *volumeServiceServer) ResizeVolume(ctx context.Context, request *beansto
 	return &beanstorev1.ResizeVolumeResponse{}, nil
 }
 
+func (s *volumeServiceServer) Export(request *beanstorev1.ExportRequest, stream grpc.ServerStreamingServer[beanstorev1.ExportResponse]) error {
+	if !volumeIDPattern.MatchString(request.SnapshotId) {
+		return status.Error(codes.InvalidArgument, "snapshot_id is not a valid lv name")
+	}
+
+	ctx := stream.Context()
+	s.pins.Acquire(request.SnapshotId)
+	defer s.releaseExport(request.SnapshotId)
+
+	snapshot, err := storage.GetVolume(ctx, s.lvm, s.cfg, request.SnapshotId)
+	if err != nil {
+		return volumeError(ctx, err, "export lookup failed")
+	}
+	if snapshot.State != storage.StateSnapshot {
+		return volumeError(ctx, &storage.WrongStateError{
+			Volume: request.SnapshotId, Found: snapshot.State,
+		}, "export refused")
+	}
+
+	name := lvm.Name(s.cfg.VolumeGroup + "/" + request.SnapshotId)
+	err = s.lvm.ActivateLogicalVolume(ctx, name, lvm.ActivateLogicalVolumeOptions{
+		IgnoreActivationSkip: true,
+	})
+	if err != nil {
+		logging.FromContext(ctx).Error("activating snapshot for export", "snapshot", request.SnapshotId, "error", err)
+		return status.Error(codes.Internal, "activating snapshot failed")
+	}
+
+	snapshot, err = storage.GetVolume(ctx, s.lvm, s.cfg, request.SnapshotId)
+	if err != nil {
+		return volumeError(ctx, err, "export lookup failed")
+	}
+
+	size, digest, err := storage.ReadDevice(ctx, snapshot.Path, func(frame storage.Frame) error {
+		return stream.Send(&beanstorev1.ExportResponse{
+			Content: &beanstorev1.ExportResponse_Frame{Frame: &beanstorev1.Frame{
+				Offset: frame.Offset,
+				Data:   frame.Data,
+			}},
+		})
+	})
+	if err != nil {
+		logging.FromContext(ctx).Error("exporting snapshot", "snapshot", request.SnapshotId, "error", err)
+		return status.Error(codes.Internal, "export failed")
+	}
+
+	return stream.Send(&beanstorev1.ExportResponse{
+		Content: &beanstorev1.ExportResponse_Trailer{Trailer: &beanstorev1.ExportTrailer{
+			Digest:    digest,
+			SizeBytes: size,
+		}},
+	})
+}
+
+// releaseExport unpins the snapshot and deactivates it after the last
+// export. The device may already be gone or still in use by a racing
+// export, both are fine.
+func (s *volumeServiceServer) releaseExport(id string) {
+	if !s.pins.Release(id) {
+		return
+	}
+
+	err := s.lvm.DeactivateLogicalVolume(s.background,
+		lvm.Name(s.cfg.VolumeGroup+"/"+id), lvm.DeactivateLogicalVolumeOptions{})
+	if err != nil && !errors.Is(err, lvm.ErrInUse) && !errors.Is(err, lvm.ErrNotFound) {
+		logging.FromContext(s.background).Error("deactivating exported snapshot", "snapshot", id, "error", err)
+	}
+}
+
 // volumeError maps storage errors onto grpc codes. Internal failures
 // are logged and answered without detail.
 func volumeError(ctx context.Context, err error, message string) error {
@@ -265,6 +335,9 @@ func volumeError(ctx context.Context, err error, message string) error {
 
 	case errors.Is(err, storage.ErrShrink), errors.Is(err, storage.ErrHasSnapshots):
 		return status.Error(codes.FailedPrecondition, err.Error())
+
+	case errors.Is(err, storage.ErrExportInProgress):
+		return status.Error(codes.Aborted, err.Error())
 
 	case errors.As(err, &wrongState):
 		refusal := status.New(codes.FailedPrecondition, wrongState.Error())
