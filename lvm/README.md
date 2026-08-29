@@ -16,6 +16,8 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `ResizePhysicalVolume` | `pvresize` |
 | `DisplayPhysicalVolume` | `pvdisplay` |
 | `ScanPhysicalVolumes` | `pvscan --cache` |
+| `CheckPhysicalVolume` | `pvck` |
+| `DumpPhysicalVolume` | `pvck --dump` |
 
 Every operation takes an options struct. Its fields cover the command's
 flags, and the embedded `CommonOptions` override the client environment

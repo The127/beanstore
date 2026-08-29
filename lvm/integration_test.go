@@ -348,3 +348,20 @@ func TestIntegrationScanPhysicalVolumes(t *testing.T) {
 		Autoactivate: true,
 	}))
 }
+
+func TestIntegrationCheckAndDumpPhysicalVolume(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	vgFor(t, loop)
+
+	output, err := client.CheckPhysicalVolume(ctx, loop, CheckPhysicalVolumeOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, output, "Found label")
+
+	output, err = client.DumpPhysicalVolume(ctx, loop, DumpHeaders, DumpPhysicalVolumeOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, output, "label_header")
+}

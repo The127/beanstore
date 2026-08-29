@@ -363,3 +363,58 @@ func (c *Client) ScanPhysicalVolumes(ctx context.Context, opts ScanPhysicalVolum
 
 	return nil
 }
+
+// CheckPhysicalVolumeOptions configures CheckPhysicalVolume.
+type CheckPhysicalVolumeOptions struct {
+	CommonOptions
+}
+
+// CheckPhysicalVolume checks the lvm metadata on the given device and
+// returns lvm's findings.
+func (c *Client) CheckPhysicalVolume(ctx context.Context, device Device, opts CheckPhysicalVolumeOptions) (string, error) {
+	if opts.Autobackup != nil {
+		return "", errAutobackupNotSupported
+	}
+
+	cmd := c.command("pvck", opts.CommonOptions).Append(string(device))
+
+	output, err := c.run(ctx, cmd)
+	if err != nil {
+		return "", fmt.Errorf("checking physical volume %s: %w", device, err)
+	}
+
+	return string(output), nil
+}
+
+// DumpKind selects what DumpPhysicalVolume prints.
+type DumpKind string
+
+// DumpKind values.
+const (
+	DumpHeaders        DumpKind = "headers"
+	DumpMetadata       DumpKind = "metadata"
+	DumpMetadataAll    DumpKind = "metadata_all"
+	DumpMetadataSearch DumpKind = "metadata_search"
+)
+
+// DumpPhysicalVolumeOptions configures DumpPhysicalVolume.
+type DumpPhysicalVolumeOptions struct {
+	CommonOptions
+}
+
+// DumpPhysicalVolume prints the on-disk lvm headers or metadata of the
+// given device.
+func (c *Client) DumpPhysicalVolume(ctx context.Context, device Device, kind DumpKind, opts DumpPhysicalVolumeOptions) (string, error) {
+	if opts.Autobackup != nil {
+		return "", errAutobackupNotSupported
+	}
+
+	cmd := c.command("pvck", opts.CommonOptions).Append("--dump", string(kind), string(device))
+
+	output, err := c.run(ctx, cmd)
+	if err != nil {
+		return "", fmt.Errorf("dumping %s of physical volume %s: %w", kind, device, err)
+	}
+
+	return string(output), nil
+}
