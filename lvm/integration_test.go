@@ -97,17 +97,20 @@ func TestIntegrationCreateOnMissingDeviceFails(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// vgFor wraps the loop device in a vg through raw commands until the vg
-// family is wrapped.
-func vgFor(t *testing.T, loop string) string {
+// vgFor wraps the loop devices in a vg through raw commands until the
+// vg family is wrapped.
+func vgFor(t *testing.T, loops ...string) string {
 	t.Helper()
 
+	devices := strings.Join(loops, ",")
 	vg := fmt.Sprintf("beanstore-test-%d", os.Getpid())
-	_, err := sudoRun(t.Context(), "lvm", "vgcreate", "--devices", loop, vg, loop)
+
+	args := append([]string{"lvm", "vgcreate", "--devices", devices, vg}, loops...)
+	_, err := sudoRun(t.Context(), args...)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		//nolint:usetesting // t.Context is done during cleanup
-		_, _ = sudoRun(context.Background(), "lvm", "vgremove", "--devices", loop, "-f", vg)
+		_, _ = sudoRun(context.Background(), "lvm", "vgremove", "--devices", devices, "-f", vg)
 	})
 
 	return vg
@@ -209,22 +212,27 @@ func TestIntegrationRegenerateUUIDChangesUUID(t *testing.T) {
 }
 
 func TestIntegrationMetadataIgnoreRoundTrip(t *testing.T) {
-	loop := loopDevice(t)
-	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	// lvm refuses to disable the last metadata area of a vg, so the vg
+	// needs a second pv keeping one
+	first := loopDevice(t)
+	second := loopDevice(t)
+	devices := first + "," + second
+	client := New(WithRunner(sudoRunner{}), WithDevices(first, second))
 	ctx := t.Context()
 
-	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
-	vgFor(t, loop)
+	require.NoError(t, client.CreatePhysicalVolume(ctx, first, CreatePhysicalVolumeOptions{}))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, second, CreatePhysicalVolumeOptions{}))
+	vgFor(t, first, second)
 
-	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{MetadataIgnore: Bool(true)}))
+	require.NoError(t, client.ChangePhysicalVolume(ctx, first, ChangePhysicalVolumeOptions{MetadataIgnore: Bool(true)}))
 
-	output, err := sudoRun(ctx, "lvm", "pvs", "--devices", loop, "--noheadings", "-o", "pv_mda_used_count", loop)
+	output, err := sudoRun(ctx, "lvm", "pvs", "--devices", devices, "--noheadings", "-o", "pv_mda_used_count", first)
 	require.NoError(t, err)
 	assert.Equal(t, "0", strings.TrimSpace(string(output)))
 
-	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{MetadataIgnore: Bool(false)}))
+	require.NoError(t, client.ChangePhysicalVolume(ctx, first, ChangePhysicalVolumeOptions{MetadataIgnore: Bool(false)}))
 
-	output, err = sudoRun(ctx, "lvm", "pvs", "--devices", loop, "--noheadings", "-o", "pv_mda_used_count", loop)
+	output, err = sudoRun(ctx, "lvm", "pvs", "--devices", devices, "--noheadings", "-o", "pv_mda_used_count", first)
 	require.NoError(t, err)
 	assert.Equal(t, "1", strings.TrimSpace(string(output)))
 }

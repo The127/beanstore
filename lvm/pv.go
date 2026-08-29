@@ -108,7 +108,8 @@ type ChangePhysicalVolumeOptions struct {
 	// pv.
 	Allocatable *bool
 	// MetadataIgnore controls whether the metadata areas on the pv are
-	// used to store vg metadata.
+	// used to store vg metadata. lvm refuses to disable the last
+	// metadata area of a vg.
 	MetadataIgnore *bool
 	// RegenerateUUID gives the pv a new random UUID, meant for pvs that
 	// lost uniqueness through device cloning. On hosts tracking pvs by
