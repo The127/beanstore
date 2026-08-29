@@ -71,6 +71,42 @@ func ListVolumes(ctx context.Context, client *lvm.Client, cfg config.Config) ([]
 	return volumes, nil
 }
 
+// CreateVolume creates an inactive thin volume tagged creating and
+// retags it ready once creation is complete.
+func CreateVolume(ctx context.Context, client *lvm.Client, cfg config.Config, id string, sizeBytes uint64) error {
+	err := client.CreateThinVolume(ctx, cfg.VolumeGroup, cfg.ThinPool, id, sizeBytes, lvm.CreateThinVolumeOptions{
+		AddTags:  []string{StateTag(StateCreating)},
+		Activate: lvm.Bool(false),
+	})
+	if err != nil {
+		return fmt.Errorf("creating volume %s: %w", id, err)
+	}
+
+	err = client.ChangeLogicalVolume(ctx, lvm.Name(cfg.VolumeGroup+"/"+id), lvm.ChangeLogicalVolumeOptions{
+		AddTags:    []string{StateTag(StateReady)},
+		RemoveTags: []string{StateTag(StateCreating)},
+	})
+	if err != nil {
+		return fmt.Errorf("readying volume %s: %w", id, err)
+	}
+
+	return nil
+}
+
+// VolumeExists reports whether any lv with the given name exists in
+// the configured vg.
+func VolumeExists(ctx context.Context, client *lvm.Client, cfg config.Config, id string) (bool, error) {
+	lvs, err := client.ListLogicalVolumes(ctx, lvm.ListLogicalVolumesOptions{
+		VG:     cfg.VolumeGroup,
+		Select: lvm.Select("lv_name = " + id),
+	})
+	if err != nil {
+		return false, fmt.Errorf("looking up volume %s: %w", id, err)
+	}
+
+	return len(lvs) > 0, nil
+}
+
 func stateOf(tags []string) (State, bool) {
 	for _, tag := range tags {
 		value, found := strings.CutPrefix(tag, stateTagPrefix)

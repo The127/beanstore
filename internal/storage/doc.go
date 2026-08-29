@@ -1,3 +1,3 @@
-// Package storage prepares and guards the daemon's lvm substrate: the
-// configured volume group and the thin pool all volumes live in.
+// Package storage manages the daemon's volumes in the configured
+// volume group and thin pool.
 package storage
