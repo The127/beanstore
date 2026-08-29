@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"github.com/The127/beanstore/internal/api"
+	"github.com/The127/beanstore/internal/logging"
 )
 
 // hardcoded until a config mechanism exists
@@ -23,13 +24,17 @@ const listenAddress = "127.0.0.1:50051"
 func main() {
 	err := run()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("beanstore failed", "error", err)
+		os.Exit(1)
 	}
 }
 
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	ctx = logging.WithLogger(ctx, logger)
 
 	// the notifier is nil outside systemd, all methods no-op on nil
 	notifier, err := sdnotify.New()
@@ -52,12 +57,12 @@ func run() error {
 	go func() {
 		<-ctx.Done()
 
-		log.Print("shutting down")
+		logging.FromContext(ctx).Info("shutting down")
 		_ = notifier.Notify(sdnotify.Stopping)
 		server.GracefulStop()
 	}()
 
-	log.Printf("beanstore listening on %s", listenAddress)
+	logger.Info("beanstore listening", "address", listenAddress)
 
 	err = notifier.Notify(sdnotify.Ready)
 	if err != nil {

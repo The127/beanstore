@@ -9,10 +9,12 @@ replace github.com/The127/beanstore/client => ./client
 require (
 	github.com/The127/beanstore/client v0.0.0-00010101000000-000000000000
 	github.com/mdlayher/sdnotify v1.0.0
+	github.com/stretchr/testify v1.12.1
 	google.golang.org/grpc v1.83.2
 )
 
 require (
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
