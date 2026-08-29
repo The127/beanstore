@@ -50,7 +50,7 @@ func (c *Client) CreatePhysicalVolume(ctx context.Context, device Device, opts C
 	}
 	cmd = cmd.Append(string(device))
 
-	_, err := c.runner.Run(ctx, cmd)
+	_, err := c.run(ctx, cmd)
 	if err != nil {
 		return fmt.Errorf("creating physical volume %s: %w", device, err)
 	}
@@ -84,7 +84,7 @@ func (c *Client) ListPhysicalVolumes(ctx context.Context, opts ListPhysicalVolum
 		cmd = cmd.Append("-S", string(opts.Select))
 	}
 
-	output, err := c.runner.Run(ctx, cmd)
+	output, err := c.run(ctx, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("listing physical volumes: %w", err)
 	}
@@ -106,7 +106,7 @@ func (c *Client) RemovePhysicalVolume(ctx context.Context, device Device, opts R
 
 	cmd := c.command("pvremove", opts.CommonOptions).Append(string(device))
 
-	_, err := c.runner.Run(ctx, cmd)
+	_, err := c.run(ctx, cmd)
 	if err != nil {
 		return fmt.Errorf("removing physical volume %s: %w", device, err)
 	}
@@ -171,7 +171,7 @@ func (c *Client) ChangePhysicalVolume(ctx context.Context, target Selector, opts
 		return err
 	}
 
-	_, err = c.runner.Run(ctx, cmd)
+	_, err = c.run(ctx, cmd)
 	if err != nil {
 		return fmt.Errorf("changing physical volumes %v: %w", target, err)
 	}
@@ -201,7 +201,7 @@ func (c *Client) ResizePhysicalVolume(ctx context.Context, device Device, opts R
 	}
 	cmd = cmd.Append(string(device))
 
-	_, err := c.runner.Run(ctx, cmd)
+	_, err := c.run(ctx, cmd)
 	if err != nil {
 		return fmt.Errorf("resizing physical volume %s: %w", device, err)
 	}

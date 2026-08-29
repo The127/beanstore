@@ -1,6 +1,7 @@
 package lvm
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -60,6 +61,27 @@ func New(opts ...Option) *Client {
 }
 
 var errAutobackupNotSupported = errors.New("this operation does not change metadata and does not support Autobackup")
+
+// run executes the command and translates command failures into *Error.
+// Failures that never ran a command, like context cancellation, pass
+// through untouched.
+func (c *Client) run(ctx context.Context, cmd *runner.Cmd) ([]byte, error) {
+	output, err := c.runner.Run(ctx, cmd)
+	if err != nil {
+		var runErr *runner.RunError
+		if errors.As(err, &runErr) {
+			return nil, &Error{
+				ExitCode: runErr.ExitCode,
+				Stderr:   runErr.Stderr,
+				kind:     classify(runErr.ExitCode, runErr.Stderr),
+			}
+		}
+
+		return nil, err
+	}
+
+	return output, nil
+}
 
 func appendSelector(cmd *runner.Cmd, target Selector) (*runner.Cmd, error) {
 	switch t := target.(type) {

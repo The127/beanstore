@@ -292,3 +292,23 @@ func TestIntegrationSelectTargetsMatchingPVs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, pvs, 2)
 }
+
+func TestIntegrationErrorClassification(t *testing.T) {
+	loop := loopDevice(t)
+	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
+	ctx := t.Context()
+
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
+	vgFor(t, loop)
+
+	err := client.ChangePhysicalVolume(ctx, Device("/dev/beanstore-absent"), ChangePhysicalVolumeOptions{
+		AddTags: []string{"x"},
+	})
+	assert.ErrorIs(t, err, ErrNotFound, "changing an absent pv")
+
+	err = client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{})
+	assert.ErrorIs(t, err, ErrInUse, "creating a pv over a vg member")
+
+	err = client.RemovePhysicalVolume(ctx, loop, RemovePhysicalVolumeOptions{})
+	assert.ErrorIs(t, err, ErrInUse, "removing a vg member")
+}

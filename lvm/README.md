@@ -60,6 +60,12 @@ for _, pv := range pvs {
 }
 ```
 
+## Errors
+
+Failed commands return an `*lvm.Error` with exit code and stderr. Known
+failures also match `errors.Is` sentinels: `ErrNotFound`, `ErrInUse`,
+`ErrPermission`, `ErrInvalidCommand`.
+
 ## Notes
 
 - A `Client` is safe for concurrent use. lvm itself serializes
