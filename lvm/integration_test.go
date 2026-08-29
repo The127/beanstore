@@ -704,6 +704,7 @@ func TestIntegrationLogicalVolumeCreateOptions(t *testing.T) {
 		Zero:                 Bool(false),
 		SetActivationSkip:    Bool(true),
 		IgnoreActivationSkip: true,
+		SetAutoactivation:    Bool(false),
 	}))
 	linear := lvByName(t, client, vg, "lv0")
 	assert.Equal(t, byte('r'), linear.Attributes[1])
@@ -719,11 +720,12 @@ func TestIntegrationLogicalVolumeCreateOptions(t *testing.T) {
 	}))
 	assert.Equal(t, byte('-'), lvByName(t, client, vg, "pool0").Attributes[7])
 
+	// lvm 2.03.16 rejects --setautoactivation at thin volume creation,
+	// newer versions accept it
 	require.NoError(t, client.CreateThinVolume(ctx, vg, "pool0", "vol1", 64<<20, CreateThinVolumeOptions{
 		Activate:          Bool(false),
 		Readahead:         ReadaheadNone,
 		SetActivationSkip: Bool(true),
-		SetAutoactivation: Bool(false),
 	}))
 	vol := lvByName(t, client, vg, "vol1")
 	assert.Equal(t, byte('k'), vol.Attributes[9])

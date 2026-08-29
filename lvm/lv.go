@@ -140,6 +140,8 @@ type CreateThinPoolOptions struct {
 	// Discards sets how the pool handles discards.
 	Discards Discards
 	// ErrorWhenFull makes writes to a full pool error instead of queue.
+	// Older lvm (2.03.16) rejects it at creation, ChangeLogicalVolume
+	// sets it on any version.
 	ErrorWhenFull *bool
 	// PoolMetadataSpare controls creation of the spare metadata lv in
 	// the vg.
@@ -230,7 +232,8 @@ type CreateThinVolumeOptions struct {
 	// skipped.
 	IgnoreActivationSkip bool
 	// SetAutoactivation controls whether the lv autoactivates on boot
-	// and device appearance.
+	// and device appearance. Older lvm (2.03.16) rejects it for thin
+	// volumes.
 	SetAutoactivation *bool
 	// Zero controls zeroing of the first 4KiB of the new lv.
 	Zero *bool
