@@ -3,6 +3,7 @@ package lvm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -19,11 +20,27 @@ type PhysicalVolume struct {
 	Tags        []string
 }
 
-// CreatePhysicalVolume initializes the given device for use by lvm. It
-// refuses devices carrying a recognizable signature, lvm's prompt fails
-// on the runner's closed stdin.
-func (c *Client) CreatePhysicalVolume(ctx context.Context, device string) error {
-	cmd := c.command("pvcreate").Append(device)
+// CreatePhysicalVolumeOptions configures CreatePhysicalVolume.
+type CreatePhysicalVolumeOptions struct {
+	CommonOptions
+	// Force creates without confirmation, wiping recognizable
+	// signatures on the device.
+	Force bool
+}
+
+// CreatePhysicalVolume initializes the given device for use by lvm.
+// Without Force, devices carrying a recognizable signature are refused,
+// lvm's prompt fails on the runner's closed stdin.
+func (c *Client) CreatePhysicalVolume(ctx context.Context, device string, opts CreatePhysicalVolumeOptions) error {
+	if opts.Autobackup != nil {
+		return errAutobackupNotSupported
+	}
+
+	cmd := c.command("pvcreate", opts.CommonOptions)
+	if opts.Force {
+		cmd = cmd.Append("-f")
+	}
+	cmd = cmd.Append(device)
 
 	_, err := c.runner.Run(ctx, cmd)
 	if err != nil {
@@ -33,9 +50,18 @@ func (c *Client) CreatePhysicalVolume(ctx context.Context, device string) error 
 	return nil
 }
 
+// ListPhysicalVolumesOptions configures ListPhysicalVolumes.
+type ListPhysicalVolumesOptions struct {
+	CommonOptions
+}
+
 // ListPhysicalVolumes reports all pvs visible to the client.
-func (c *Client) ListPhysicalVolumes(ctx context.Context) ([]PhysicalVolume, error) {
-	cmd := c.command("pvs").Append(
+func (c *Client) ListPhysicalVolumes(ctx context.Context, opts ListPhysicalVolumesOptions) ([]PhysicalVolume, error) {
+	if opts.Autobackup != nil {
+		return nil, errAutobackupNotSupported
+	}
+
+	cmd := c.command("pvs", opts.CommonOptions).Append(
 		"--reportformat", "json",
 		"--units", "b",
 		"--nosuffix",
@@ -50,9 +76,19 @@ func (c *Client) ListPhysicalVolumes(ctx context.Context) ([]PhysicalVolume, err
 	return parsePVReport(output)
 }
 
-// RemovePhysicalVolume wipes the lvm label from the given device.
-func (c *Client) RemovePhysicalVolume(ctx context.Context, device string) error {
-	cmd := c.command("pvremove").Append(device)
+// RemovePhysicalVolumeOptions configures RemovePhysicalVolume.
+type RemovePhysicalVolumeOptions struct {
+	CommonOptions
+}
+
+// RemovePhysicalVolume wipes the lvm label from the given device. A pv
+// belonging to a vg is refused.
+func (c *Client) RemovePhysicalVolume(ctx context.Context, device string, opts RemovePhysicalVolumeOptions) error {
+	if opts.Autobackup != nil {
+		return errAutobackupNotSupported
+	}
+
+	cmd := c.command("pvremove", opts.CommonOptions).Append(device)
 
 	_, err := c.runner.Run(ctx, cmd)
 	if err != nil {
@@ -60,6 +96,104 @@ func (c *Client) RemovePhysicalVolume(ctx context.Context, device string) error 
 	}
 
 	return nil
+}
+
+// ChangePhysicalVolumeOptions configures ChangePhysicalVolume. At least
+// one property must be set.
+type ChangePhysicalVolumeOptions struct {
+	CommonOptions
+	AddTags    []string
+	RemoveTags []string
+	// Allocatable controls whether lvm may allocate new extents on the
+	// pv.
+	Allocatable *bool
+	// MetadataIgnore controls whether the metadata areas on the pv are
+	// used to store vg metadata.
+	MetadataIgnore *bool
+	// RegenerateUUID gives the pv a new random UUID, meant for pvs that
+	// lost uniqueness through device cloning. On hosts tracking pvs by
+	// UUID in the devices file, lvm updates the entry as part of the
+	// command.
+	RegenerateUUID bool
+}
+
+// ChangePhysicalVolume changes properties of the given pv, which must
+// be in a vg. All requested changes run as one lvm command.
+func (c *Client) ChangePhysicalVolume(ctx context.Context, device string, opts ChangePhysicalVolumeOptions) error {
+	cmd := c.metadataCommand("pvchange", opts.CommonOptions)
+
+	properties := 0
+	for _, tag := range opts.AddTags {
+		cmd = cmd.Append("--addtag", tag)
+		properties++
+	}
+	for _, tag := range opts.RemoveTags {
+		cmd = cmd.Append("--deltag", tag)
+		properties++
+	}
+	if opts.Allocatable != nil {
+		cmd = cmd.Append("-x", flagValue(*opts.Allocatable))
+		properties++
+	}
+	if opts.MetadataIgnore != nil {
+		cmd = cmd.Append("--metadataignore", flagValue(*opts.MetadataIgnore))
+		properties++
+	}
+	if opts.RegenerateUUID {
+		cmd = cmd.Append("-u")
+		properties++
+	}
+
+	if properties == 0 {
+		return errors.New("changing a physical volume requires at least one property")
+	}
+
+	cmd = cmd.Append(device)
+
+	_, err := c.runner.Run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("changing physical volume %s: %w", device, err)
+	}
+
+	return nil
+}
+
+// ResizePhysicalVolumeOptions configures ResizePhysicalVolume.
+type ResizePhysicalVolumeOptions struct {
+	CommonOptions
+	// SizeBytes overrides the automatically detected device size, meant
+	// to shrink a pv before shrinking the underlying device. The
+	// confirmation lvm asks for is answered, the explicit size already
+	// expresses the intent. Zero detects the device size.
+	SizeBytes uint64
+}
+
+// ResizePhysicalVolume resizes the given pv, by default to the current
+// size of its underlying device.
+func (c *Client) ResizePhysicalVolume(ctx context.Context, device string, opts ResizePhysicalVolumeOptions) error {
+	cmd := c.metadataCommand("pvresize", opts.CommonOptions)
+	if opts.SizeBytes > 0 {
+		cmd = cmd.Append(
+			"--setphysicalvolumesize", strconv.FormatUint(opts.SizeBytes, 10)+"b",
+			"-y",
+		)
+	}
+	cmd = cmd.Append(device)
+
+	_, err := c.runner.Run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("resizing physical volume %s: %w", device, err)
+	}
+
+	return nil
+}
+
+func flagValue(value bool) string {
+	if value {
+		return "y"
+	}
+
+	return "n"
 }
 
 type pvReport struct {
@@ -115,111 +249,4 @@ func parsePVReport(output []byte) ([]PhysicalVolume, error) {
 	}
 
 	return volumes, nil
-}
-
-// AddPhysicalVolumeTag tags the given pv, which must be in a vg.
-func (c *Client) AddPhysicalVolumeTag(ctx context.Context, device, tag string) error {
-	cmd := c.command("pvchange").Append("--addtag", tag, device)
-
-	_, err := c.runner.Run(ctx, cmd)
-	if err != nil {
-		return fmt.Errorf("tagging physical volume %s with %s: %w", device, tag, err)
-	}
-
-	return nil
-}
-
-// RemovePhysicalVolumeTag removes a tag from the given pv.
-func (c *Client) RemovePhysicalVolumeTag(ctx context.Context, device, tag string) error {
-	cmd := c.command("pvchange").Append("--deltag", tag, device)
-
-	_, err := c.runner.Run(ctx, cmd)
-	if err != nil {
-		return fmt.Errorf("untagging physical volume %s from %s: %w", device, tag, err)
-	}
-
-	return nil
-}
-
-// SetPhysicalVolumeAllocatable controls whether lvm may allocate new
-// extents on the given pv.
-func (c *Client) SetPhysicalVolumeAllocatable(ctx context.Context, device string, allocatable bool) error {
-	value := "n"
-	if allocatable {
-		value = "y"
-	}
-
-	cmd := c.command("pvchange").Append("-x", value, device)
-
-	_, err := c.runner.Run(ctx, cmd)
-	if err != nil {
-		return fmt.Errorf("setting physical volume %s allocatable=%s: %w", device, value, err)
-	}
-
-	return nil
-}
-
-// ResizePhysicalVolume grows the given pv to the current size of its
-// underlying device.
-func (c *Client) ResizePhysicalVolume(ctx context.Context, device string) error {
-	cmd := c.command("pvresize").Append(device)
-
-	_, err := c.runner.Run(ctx, cmd)
-	if err != nil {
-		return fmt.Errorf("resizing physical volume %s: %w", device, err)
-	}
-
-	return nil
-}
-
-// RegeneratePhysicalVolumeUUID gives the given pv a new random UUID.
-// Meant for pvs that lost UUID uniqueness through device cloning. On
-// hosts tracking pvs by UUID in the devices file, lvm updates the entry
-// as part of the command.
-func (c *Client) RegeneratePhysicalVolumeUUID(ctx context.Context, device string) error {
-	cmd := c.command("pvchange").Append("-u", device)
-
-	_, err := c.runner.Run(ctx, cmd)
-	if err != nil {
-		return fmt.Errorf("regenerating uuid of physical volume %s: %w", device, err)
-	}
-
-	return nil
-}
-
-// SetPhysicalVolumeMetadataIgnore controls whether the metadata areas
-// on the given pv are used to store vg metadata.
-func (c *Client) SetPhysicalVolumeMetadataIgnore(ctx context.Context, device string, ignore bool) error {
-	value := "n"
-	if ignore {
-		value = "y"
-	}
-
-	cmd := c.command("pvchange").Append("--metadataignore", value, device)
-
-	_, err := c.runner.Run(ctx, cmd)
-	if err != nil {
-		return fmt.Errorf("setting physical volume %s metadataignore=%s: %w", device, value, err)
-	}
-
-	return nil
-}
-
-// ResizePhysicalVolumeTo overrides the pv size instead of detecting it,
-// meant to shrink a pv before shrinking the underlying device. The
-// confirmation lvm asks for is answered, the explicit size already
-// expresses the intent.
-func (c *Client) ResizePhysicalVolumeTo(ctx context.Context, device string, sizeBytes uint64) error {
-	cmd := c.command("pvresize").Append(
-		"--setphysicalvolumesize", strconv.FormatUint(sizeBytes, 10)+"b",
-		"-y",
-		device,
-	)
-
-	_, err := c.runner.Run(ctx, cmd)
-	if err != nil {
-		return fmt.Errorf("resizing physical volume %s to %d bytes: %w", device, sizeBytes, err)
-	}
-
-	return nil
 }

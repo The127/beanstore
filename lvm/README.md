@@ -7,30 +7,37 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 
 ## Supported operations
 
-| Go                              | lvm                 |
-| ------------------------------- | ------------------- |
-| `CreatePhysicalVolume`          | `pvcreate`          |
-| `ListPhysicalVolumes`           | `pvs`               |
-| `RemovePhysicalVolume`          | `pvremove`          |
-| `AddPhysicalVolumeTag`          | `pvchange --addtag` |
-| `RemovePhysicalVolumeTag`       | `pvchange --deltag` |
-| `SetPhysicalVolumeAllocatable`  | `pvchange -x`       |
-| `RegeneratePhysicalVolumeUUID`  | `pvchange -u`       |
-| `SetPhysicalVolumeMetadataIgnore` | `pvchange --metadataignore` |
-| `ResizePhysicalVolume`          | `pvresize`          |
-| `ResizePhysicalVolumeTo`        | `pvresize --setphysicalvolumesize` |
+| Go                     | lvm        |
+| ---------------------- | ---------- |
+| `CreatePhysicalVolume` | `pvcreate` |
+| `ListPhysicalVolumes`  | `pvs`      |
+| `RemovePhysicalVolume` | `pvremove` |
+| `ChangePhysicalVolume` | `pvchange` |
+| `ResizePhysicalVolume` | `pvresize` |
+
+Every operation takes an options struct. Its fields cover the command's
+flags, and the embedded `CommonOptions` override the client environment
+(device scoping, autobackup) for one call.
 
 ## Usage
 
 ```go
 client := lvm.New()
 
-err := client.CreatePhysicalVolume(ctx, "/dev/sdb")
+err := client.CreatePhysicalVolume(ctx, "/dev/sdb", lvm.CreatePhysicalVolumeOptions{})
 if err != nil {
 	return err
 }
 
-pvs, err := client.ListPhysicalVolumes(ctx)
+err = client.ChangePhysicalVolume(ctx, "/dev/sdb", lvm.ChangePhysicalVolumeOptions{
+	AddTags:     []string{"ssd"},
+	Allocatable: lvm.Bool(true),
+})
+if err != nil {
+	return err
+}
+
+pvs, err := client.ListPhysicalVolumes(ctx, lvm.ListPhysicalVolumesOptions{})
 if err != nil {
 	return err
 }

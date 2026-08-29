@@ -24,7 +24,7 @@ func TestCreatePhysicalVolumeBuildsCommand(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop0")
+	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop0", CreatePhysicalVolumeOptions{})
 
 	require.NoError(t, err)
 	require.Len(t, fake.calls, 1)
@@ -32,11 +32,23 @@ func TestCreatePhysicalVolumeBuildsCommand(t *testing.T) {
 	assert.Equal(t, []string{"pvcreate", "/dev/loop0"}, fake.calls[0].Args())
 }
 
-func TestWithDevicesScopesEveryCommand(t *testing.T) {
+func TestCreatePhysicalVolumeForce(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop0", CreatePhysicalVolumeOptions{
+		Force: true,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvcreate", "-f", "/dev/loop0"}, fake.calls[0].Args())
+}
+
+func TestClientDevicesScopeEveryCommand(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake), WithDevices("/dev/loop0", "/dev/loop1"))
 
-	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop0")
+	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop0", CreatePhysicalVolumeOptions{})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{
@@ -44,6 +56,66 @@ func TestWithDevicesScopesEveryCommand(t *testing.T) {
 		"--devices", "/dev/loop0,/dev/loop1",
 		"/dev/loop0",
 	}, fake.calls[0].Args())
+}
+
+func TestCallDevicesOverrideClientDevices(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake), WithDevices("/dev/loop0"))
+
+	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop7", CreatePhysicalVolumeOptions{
+		CommonOptions: CommonOptions{Devices: []string{"/dev/loop7"}},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"pvcreate",
+		"--devices", "/dev/loop7",
+		"/dev/loop7",
+	}, fake.calls[0].Args())
+}
+
+func TestClientAutobackupAppliesToMetadataCommands(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake), WithAutobackup(false))
+
+	err := client.ResizePhysicalVolume(t.Context(), "/dev/loop0", ResizePhysicalVolumeOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvresize", "-A", "n", "/dev/loop0"}, fake.calls[0].Args())
+}
+
+func TestCallAutobackupOverridesClientAutobackup(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake), WithAutobackup(false))
+
+	err := client.ResizePhysicalVolume(t.Context(), "/dev/loop0", ResizePhysicalVolumeOptions{
+		CommonOptions: CommonOptions{Autobackup: Bool(true)},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvresize", "-A", "y", "/dev/loop0"}, fake.calls[0].Args())
+}
+
+func TestCallAutobackupOnNonMetadataCommandFails(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop0", CreatePhysicalVolumeOptions{
+		CommonOptions: CommonOptions{Autobackup: Bool(false)},
+	})
+
+	assert.ErrorIs(t, err, errAutobackupNotSupported)
+	assert.Empty(t, fake.calls)
+}
+
+func TestClientAutobackupIsIgnoredByNonMetadataCommands(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake), WithAutobackup(false))
+
+	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop0", CreatePhysicalVolumeOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvcreate", "/dev/loop0"}, fake.calls[0].Args())
 }
 
 func TestListPhysicalVolumesBuildsCommandAndParses(t *testing.T) {
@@ -57,7 +129,7 @@ func TestListPhysicalVolumesBuildsCommandAndParses(t *testing.T) {
 		]}], "log": []}`)}
 	client := New(WithRunner(fake))
 
-	pvs, err := client.ListPhysicalVolumes(t.Context())
+	pvs, err := client.ListPhysicalVolumes(t.Context(), ListPhysicalVolumesOptions{})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{
@@ -89,7 +161,7 @@ func TestListPhysicalVolumesRejectsMalformedSize(t *testing.T) {
 		]}]}`)}
 	client := New(WithRunner(fake))
 
-	_, err := client.ListPhysicalVolumes(t.Context())
+	_, err := client.ListPhysicalVolumes(t.Context(), ListPhysicalVolumesOptions{})
 
 	assert.ErrorContains(t, err, "parsing size")
 }
@@ -98,88 +170,54 @@ func TestRemovePhysicalVolumeBuildsCommand(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	err := client.RemovePhysicalVolume(t.Context(), "/dev/loop0")
+	err := client.RemovePhysicalVolume(t.Context(), "/dev/loop0", RemovePhysicalVolumeOptions{})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"pvremove", "/dev/loop0"}, fake.calls[0].Args())
 }
 
-func TestRunnerErrorsPropagate(t *testing.T) {
-	fake := &fakeRunner{err: assert.AnError}
-	client := New(WithRunner(fake))
-
-	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop0")
-
-	assert.ErrorIs(t, err, assert.AnError)
-}
-
-func TestAddPhysicalVolumeTagBuildsCommand(t *testing.T) {
+func TestChangePhysicalVolumeCombinesPropertiesInOneCommand(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	err := client.AddPhysicalVolumeTag(t.Context(), "/dev/loop0", "fast")
+	err := client.ChangePhysicalVolume(t.Context(), "/dev/loop0", ChangePhysicalVolumeOptions{
+		AddTags:        []string{"fast", "ssd"},
+		RemoveTags:     []string{"old"},
+		Allocatable:    Bool(false),
+		MetadataIgnore: Bool(true),
+		RegenerateUUID: true,
+	})
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{"pvchange", "--addtag", "fast", "/dev/loop0"}, fake.calls[0].Args())
+	assert.Equal(t, []string{
+		"pvchange",
+		"--addtag", "fast",
+		"--addtag", "ssd",
+		"--deltag", "old",
+		"-x", "n",
+		"--metadataignore", "y",
+		"-u",
+		"/dev/loop0",
+	}, fake.calls[0].Args())
 }
 
-func TestRemovePhysicalVolumeTagBuildsCommand(t *testing.T) {
+func TestChangePhysicalVolumeRequiresAProperty(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	err := client.RemovePhysicalVolumeTag(t.Context(), "/dev/loop0", "fast")
+	err := client.ChangePhysicalVolume(t.Context(), "/dev/loop0", ChangePhysicalVolumeOptions{})
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{"pvchange", "--deltag", "fast", "/dev/loop0"}, fake.calls[0].Args())
+	assert.ErrorContains(t, err, "at least one property")
+	assert.Empty(t, fake.calls)
 }
 
-func TestSetPhysicalVolumeAllocatableBuildsCommand(t *testing.T) {
+func TestResizePhysicalVolumeToSizeBuildsCommand(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	require.NoError(t, client.SetPhysicalVolumeAllocatable(t.Context(), "/dev/loop0", false))
-	require.NoError(t, client.SetPhysicalVolumeAllocatable(t.Context(), "/dev/loop0", true))
-
-	assert.Equal(t, []string{"pvchange", "-x", "n", "/dev/loop0"}, fake.calls[0].Args())
-	assert.Equal(t, []string{"pvchange", "-x", "y", "/dev/loop0"}, fake.calls[1].Args())
-}
-
-func TestResizePhysicalVolumeBuildsCommand(t *testing.T) {
-	fake := &fakeRunner{}
-	client := New(WithRunner(fake))
-
-	err := client.ResizePhysicalVolume(t.Context(), "/dev/loop0")
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"pvresize", "/dev/loop0"}, fake.calls[0].Args())
-}
-
-func TestRegeneratePhysicalVolumeUUIDBuildsCommand(t *testing.T) {
-	fake := &fakeRunner{}
-	client := New(WithRunner(fake))
-
-	err := client.RegeneratePhysicalVolumeUUID(t.Context(), "/dev/loop0")
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"pvchange", "-u", "/dev/loop0"}, fake.calls[0].Args())
-}
-
-func TestSetPhysicalVolumeMetadataIgnoreBuildsCommand(t *testing.T) {
-	fake := &fakeRunner{}
-	client := New(WithRunner(fake))
-
-	require.NoError(t, client.SetPhysicalVolumeMetadataIgnore(t.Context(), "/dev/loop0", true))
-	require.NoError(t, client.SetPhysicalVolumeMetadataIgnore(t.Context(), "/dev/loop0", false))
-
-	assert.Equal(t, []string{"pvchange", "--metadataignore", "y", "/dev/loop0"}, fake.calls[0].Args())
-	assert.Equal(t, []string{"pvchange", "--metadataignore", "n", "/dev/loop0"}, fake.calls[1].Args())
-}
-
-func TestResizePhysicalVolumeToBuildsCommand(t *testing.T) {
-	fake := &fakeRunner{}
-	client := New(WithRunner(fake))
-
-	err := client.ResizePhysicalVolumeTo(t.Context(), "/dev/loop0", 536870912)
+	err := client.ResizePhysicalVolume(t.Context(), "/dev/loop0", ResizePhysicalVolumeOptions{
+		SizeBytes: 536870912,
+	})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{
@@ -188,4 +226,13 @@ func TestResizePhysicalVolumeToBuildsCommand(t *testing.T) {
 		"-y",
 		"/dev/loop0",
 	}, fake.calls[0].Args())
+}
+
+func TestRunnerErrorsPropagate(t *testing.T) {
+	fake := &fakeRunner{err: assert.AnError}
+	client := New(WithRunner(fake))
+
+	err := client.CreatePhysicalVolume(t.Context(), "/dev/loop0", CreatePhysicalVolumeOptions{})
+
+	assert.ErrorIs(t, err, assert.AnError)
 }

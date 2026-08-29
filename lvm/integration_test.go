@@ -67,13 +67,13 @@ func TestIntegrationPhysicalVolumeLifecycle(t *testing.T) {
 	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
 	ctx := t.Context()
 
-	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
 	t.Cleanup(func() {
 		//nolint:usetesting // t.Context is done during cleanup
-		_ = client.RemovePhysicalVolume(context.Background(), loop)
+		_ = client.RemovePhysicalVolume(context.Background(), loop, RemovePhysicalVolumeOptions{})
 	})
 
-	pvs, err := client.ListPhysicalVolumes(ctx)
+	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	require.Len(t, pvs, 1)
 	assert.Equal(t, loop, pvs[0].Device)
@@ -81,9 +81,9 @@ func TestIntegrationPhysicalVolumeLifecycle(t *testing.T) {
 	assert.NotZero(t, pvs[0].SizeBytes)
 	assert.Empty(t, pvs[0].Tags)
 
-	require.NoError(t, client.RemovePhysicalVolume(ctx, loop))
+	require.NoError(t, client.RemovePhysicalVolume(ctx, loop, RemovePhysicalVolumeOptions{}))
 
-	pvs, err = client.ListPhysicalVolumes(ctx)
+	pvs, err = client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	assert.Empty(t, pvs)
 }
@@ -92,7 +92,7 @@ func TestIntegrationCreateOnMissingDeviceFails(t *testing.T) {
 	loop := loopDevice(t)
 	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
 
-	err := client.CreatePhysicalVolume(t.Context(), "/dev/beanstore-absent")
+	err := client.CreatePhysicalVolume(t.Context(), "/dev/beanstore-absent", CreatePhysicalVolumeOptions{})
 
 	assert.Error(t, err)
 }
@@ -118,20 +118,20 @@ func TestIntegrationPhysicalVolumeTags(t *testing.T) {
 	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
 	ctx := t.Context()
 
-	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
 	vgFor(t, loop)
 
-	require.NoError(t, client.AddPhysicalVolumeTag(ctx, loop, "fast"))
-	require.NoError(t, client.AddPhysicalVolumeTag(ctx, loop, "ssd"))
+	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{AddTags: []string{"fast"}}))
+	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{AddTags: []string{"ssd"}}))
 
-	pvs, err := client.ListPhysicalVolumes(ctx)
+	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	require.Len(t, pvs, 1)
 	assert.ElementsMatch(t, []string{"fast", "ssd"}, pvs[0].Tags)
 
-	require.NoError(t, client.RemovePhysicalVolumeTag(ctx, loop, "fast"))
+	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{RemoveTags: []string{"fast"}}))
 
-	pvs, err = client.ListPhysicalVolumes(ctx)
+	pvs, err = client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ssd"}, pvs[0].Tags)
 }
@@ -141,18 +141,18 @@ func TestIntegrationPhysicalVolumeAllocatable(t *testing.T) {
 	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
 	ctx := t.Context()
 
-	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
 	vgFor(t, loop)
 
-	require.NoError(t, client.SetPhysicalVolumeAllocatable(ctx, loop, false))
+	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{Allocatable: Bool(false)}))
 
-	pvs, err := client.ListPhysicalVolumes(ctx)
+	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	assert.NotEqual(t, "a", pvs[0].Attributes[:1])
 
-	require.NoError(t, client.SetPhysicalVolumeAllocatable(ctx, loop, true))
+	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{Allocatable: Bool(true)}))
 
-	pvs, err = client.ListPhysicalVolumes(ctx)
+	pvs, err = client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, "a", pvs[0].Attributes[:1])
 }
@@ -162,9 +162,9 @@ func TestIntegrationPhysicalVolumeResize(t *testing.T) {
 	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
 	ctx := t.Context()
 
-	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
 
-	pvs, err := client.ListPhysicalVolumes(ctx)
+	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	sizeBefore := pvs[0].SizeBytes
 
@@ -173,9 +173,9 @@ func TestIntegrationPhysicalVolumeResize(t *testing.T) {
 	_, err = sudoRun(ctx, "losetup", "-c", loop)
 	require.NoError(t, err)
 
-	require.NoError(t, client.ResizePhysicalVolume(ctx, loop))
+	require.NoError(t, client.ResizePhysicalVolume(ctx, loop, ResizePhysicalVolumeOptions{}))
 
-	pvs, err = client.ListPhysicalVolumes(ctx)
+	pvs, err = client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	assert.Greater(t, pvs[0].SizeBytes, sizeBefore)
 }
@@ -193,17 +193,17 @@ func TestIntegrationRegenerateUUIDChangesUUID(t *testing.T) {
 	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
 	ctx := t.Context()
 
-	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
 	vgFor(t, loop)
 
-	pvs, err := client.ListPhysicalVolumes(ctx)
+	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	before := pvs[0].UUID
 	require.NotEmpty(t, before)
 
-	require.NoError(t, client.RegeneratePhysicalVolumeUUID(ctx, loop))
+	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{RegenerateUUID: true}))
 
-	pvs, err = client.ListPhysicalVolumes(ctx)
+	pvs, err = client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	assert.NotEqual(t, before, pvs[0].UUID)
 }
@@ -213,16 +213,16 @@ func TestIntegrationMetadataIgnoreRoundTrip(t *testing.T) {
 	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
 	ctx := t.Context()
 
-	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
 	vgFor(t, loop)
 
-	require.NoError(t, client.SetPhysicalVolumeMetadataIgnore(ctx, loop, true))
+	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{MetadataIgnore: Bool(true)}))
 
 	output, err := sudoRun(ctx, "lvm", "pvs", "--devices", loop, "--noheadings", "-o", "pv_mda_used_count", loop)
 	require.NoError(t, err)
 	assert.Equal(t, "0", strings.TrimSpace(string(output)))
 
-	require.NoError(t, client.SetPhysicalVolumeMetadataIgnore(ctx, loop, false))
+	require.NoError(t, client.ChangePhysicalVolume(ctx, loop, ChangePhysicalVolumeOptions{MetadataIgnore: Bool(false)}))
 
 	output, err = sudoRun(ctx, "lvm", "pvs", "--devices", loop, "--noheadings", "-o", "pv_mda_used_count", loop)
 	require.NoError(t, err)
@@ -234,11 +234,11 @@ func TestIntegrationResizeToShrinksOrphanPV(t *testing.T) {
 	client := New(WithRunner(sudoRunner{}), WithDevices(loop))
 	ctx := t.Context()
 
-	require.NoError(t, client.CreatePhysicalVolume(ctx, loop))
+	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, CreatePhysicalVolumeOptions{}))
 
-	require.NoError(t, client.ResizePhysicalVolumeTo(ctx, loop, 512<<20))
+	require.NoError(t, client.ResizePhysicalVolume(ctx, loop, ResizePhysicalVolumeOptions{SizeBytes: 512 << 20}))
 
-	pvs, err := client.ListPhysicalVolumes(ctx)
+	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{})
 	require.NoError(t, err)
 	assert.LessOrEqual(t, pvs[0].SizeBytes, uint64(512<<20))
 }
