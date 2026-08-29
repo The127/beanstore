@@ -1,0 +1,27 @@
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+ignore:
+  - "client/gen"
+
+component_management:
+  individual_components:
+    - component_id: server
+      name: server
+      paths:
+        - cmd/**
+        - internal/**
+    - component_id: client
+      name: client
+      paths:
+        - client/**
+    - component_id: lvm
+      name: lvm
+      paths:
+        - lvm/**
