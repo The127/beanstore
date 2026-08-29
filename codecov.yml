@@ -9,6 +9,7 @@ coverage:
 
 ignore:
   - "client/gen"
+  - "cmd/beanstore"
 
 component_management:
   individual_components:
