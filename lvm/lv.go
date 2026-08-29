@@ -3,6 +3,7 @@ package lvm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -295,4 +296,95 @@ func parsePercent(value string) (float64, error) {
 	}
 
 	return strconv.ParseFloat(value, 64)
+}
+
+// ChangeLogicalVolumeOptions configures ChangeLogicalVolume. At least
+// one property must be set.
+type ChangeLogicalVolumeOptions struct {
+	CommonOptions
+	AddTags    []string
+	RemoveTags []string
+}
+
+// ChangeLogicalVolume changes properties of the lvs the target selects.
+// All requested changes run as one lvm command.
+func (c *Client) ChangeLogicalVolume(ctx context.Context, target Selector, opts ChangeLogicalVolumeOptions) error {
+	cmd := c.metadataCommand("lvchange", opts.CommonOptions)
+
+	properties := 0
+	for _, tag := range opts.AddTags {
+		cmd = cmd.Append("--addtag", tag)
+		properties++
+	}
+	for _, tag := range opts.RemoveTags {
+		cmd = cmd.Append("--deltag", tag)
+		properties++
+	}
+
+	if properties == 0 {
+		return errors.New("changing a logical volume requires at least one property")
+	}
+
+	cmd, err := appendSelector(cmd, target, "")
+	if err != nil {
+		return err
+	}
+
+	_, err = c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("changing logical volumes %v: %w", target, err)
+	}
+
+	return nil
+}
+
+// ActivateLogicalVolumeOptions configures ActivateLogicalVolume.
+type ActivateLogicalVolumeOptions struct {
+	CommonOptions
+	// IgnoreActivationSkip also activates lvs flagged to be skipped.
+	IgnoreActivationSkip bool
+}
+
+// ActivateLogicalVolume activates the lvs the target selects, giving
+// them device nodes.
+func (c *Client) ActivateLogicalVolume(ctx context.Context, target Selector, opts ActivateLogicalVolumeOptions) error {
+	cmd := c.metadataCommand("lvchange", opts.CommonOptions).Append("-a", "y")
+	if opts.IgnoreActivationSkip {
+		cmd = cmd.Append("-K")
+	}
+
+	cmd, err := appendSelector(cmd, target, "")
+	if err != nil {
+		return err
+	}
+
+	_, err = c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("activating logical volumes %v: %w", target, err)
+	}
+
+	return nil
+}
+
+// DeactivateLogicalVolumeOptions configures DeactivateLogicalVolume.
+type DeactivateLogicalVolumeOptions struct {
+	CommonOptions
+}
+
+// DeactivateLogicalVolume deactivates the lvs the target selects,
+// removing their device nodes.
+func (c *Client) DeactivateLogicalVolume(ctx context.Context, target Selector, opts DeactivateLogicalVolumeOptions) error {
+	cmd := c.metadataCommand("lvchange", opts.CommonOptions).Append("-a", "n")
+
+	cmd, err := appendSelector(cmd, target, "")
+	if err != nil {
+		return err
+	}
+
+	_, err = c.run(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("deactivating logical volumes %v: %w", target, err)
+	}
+
+	return nil
 }

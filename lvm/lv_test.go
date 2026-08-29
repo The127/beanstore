@@ -142,3 +142,44 @@ func TestRemoveLogicalVolumeBuildsCommand(t *testing.T) {
 	assert.Equal(t, []string{"lvremove", "vg0/vol1"}, fake.calls[0].Args())
 	assert.Equal(t, []string{"lvremove", "-f", "-S", "lv_tags = {gone}"}, fake.calls[1].Args())
 }
+
+func TestChangeLogicalVolumeBuildsCommand(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ChangeLogicalVolume(t.Context(), Name("vg0/vol1"), ChangeLogicalVolumeOptions{
+		AddTags:    []string{"state.ready"},
+		RemoveTags: []string{"state.creating"},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"lvchange",
+		"--addtag", "state.ready",
+		"--deltag", "state.creating",
+		"vg0/vol1",
+	}, fake.calls[0].Args())
+}
+
+func TestChangeLogicalVolumeRequiresAProperty(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	err := client.ChangeLogicalVolume(t.Context(), Name("vg0/vol1"), ChangeLogicalVolumeOptions{})
+
+	assert.ErrorContains(t, err, "at least one property")
+	assert.Empty(t, fake.calls)
+}
+
+func TestActivateAndDeactivateLogicalVolumeBuildCommands(t *testing.T) {
+	fake := &fakeRunner{}
+	client := New(WithRunner(fake))
+
+	require.NoError(t, client.ActivateLogicalVolume(t.Context(), Name("vg0/vol1"), ActivateLogicalVolumeOptions{
+		IgnoreActivationSkip: true,
+	}))
+	require.NoError(t, client.DeactivateLogicalVolume(t.Context(), Select("lv_tags = {beanstore}"), DeactivateLogicalVolumeOptions{}))
+
+	assert.Equal(t, []string{"lvchange", "-a", "y", "-K", "vg0/vol1"}, fake.calls[0].Args())
+	assert.Equal(t, []string{"lvchange", "-a", "n", "-S", "lv_tags = {beanstore}"}, fake.calls[1].Args())
+}

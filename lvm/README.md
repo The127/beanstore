@@ -45,6 +45,9 @@ programmatic interface since lvm2 removed liblvm2app. Requires lvm2
 | `CreateThinVolume` | `lvcreate --type thin` |
 | `ListLogicalVolumes` | `lvs` |
 | `RemoveLogicalVolume` | `lvremove` |
+| `ChangeLogicalVolume` | `lvchange` |
+| `ActivateLogicalVolume` | `lvchange -a y` |
+| `DeactivateLogicalVolume` | `lvchange -a n` |
 
 Every operation takes an options struct. Its fields cover the command's
 flags, and the embedded `CommonOptions` override the client environment

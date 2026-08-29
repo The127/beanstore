@@ -607,13 +607,27 @@ func TestIntegrationThinVolumeLifecycle(t *testing.T) {
 	assert.False(t, lvs[0].Active, "created inactive")
 	assert.Contains(t, lvs[0].Layout, "thin")
 
-	require.NoError(t, client.ActivateVolumeGroup(ctx, Name(vg), ActivateVolumeGroupOptions{}))
+	require.NoError(t, client.ActivateLogicalVolume(ctx, Name(vg+"/vol1"), ActivateLogicalVolumeOptions{}))
 
 	lvs, err = client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{VG: vg, Select: "lv_name = vol1"})
 	require.NoError(t, err)
 	require.Len(t, lvs, 1)
 	assert.True(t, lvs[0].Active)
 	assert.NotEmpty(t, lvs[0].Path)
+
+	require.NoError(t, client.ChangeLogicalVolume(ctx, Name(vg+"/vol1"), ChangeLogicalVolumeOptions{
+		AddTags:    []string{"state.ready"},
+		RemoveTags: []string{"state.creating"},
+	}))
+	tagged, err := client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{VG: vg, Select: "lv_tags = {state.ready}"})
+	require.NoError(t, err)
+	require.Len(t, tagged, 1)
+	assert.Equal(t, []string{"state.ready"}, tagged[0].Tags)
+
+	require.NoError(t, client.DeactivateLogicalVolume(ctx, Name(vg+"/vol1"), DeactivateLogicalVolumeOptions{}))
+	lvs, err = client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{VG: vg, Select: "lv_name = vol1"})
+	require.NoError(t, err)
+	assert.False(t, lvs[0].Active)
 
 	pools, err := client.ListLogicalVolumes(ctx, ListLogicalVolumesOptions{VG: vg, Select: "lv_name = pool0"})
 	require.NoError(t, err)
