@@ -24,7 +24,7 @@ Change operations address their targets through a selector:
 List operations filter with the `Select` options field instead:
 
 ```go
-err := client.ChangePhysicalVolume(ctx, lvm.Select("pv_tags = @retiring"),
+err := client.ChangePhysicalVolume(ctx, lvm.Select("pv_tags = {retiring}"),
 	lvm.ChangePhysicalVolumeOptions{AddTags: []string{"drained"}})
 
 pvs, err := client.ListPhysicalVolumes(ctx, lvm.ListPhysicalVolumesOptions{
@@ -62,6 +62,9 @@ for _, pv := range pvs {
 
 ## Notes
 
+- A `Client` is safe for concurrent use. lvm itself serializes
+  conflicting commands through its own locking, so parallel calls may
+  wait on each other.
 - lvm needs read and write access to the target block devices, to the
   device-mapper control node `/dev/mapper/control`, and to its lock and
   metadata directories under `/run/lock/lvm` and `/etc/lvm`. Run the

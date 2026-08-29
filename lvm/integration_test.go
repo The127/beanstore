@@ -275,11 +275,11 @@ func TestIntegrationSelectTargetsMatchingPVs(t *testing.T) {
 		AddTags: []string{"fast"},
 	}))
 
-	require.NoError(t, client.ChangePhysicalVolume(ctx, Select("pv_tags = @fast"), ChangePhysicalVolumeOptions{
+	require.NoError(t, client.ChangePhysicalVolume(ctx, Select("pv_tags = {fast}"), ChangePhysicalVolumeOptions{
 		AddTags: []string{"chosen"},
 	}))
 
-	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{Select: "pv_tags = @chosen"})
+	pvs, err := client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{Select: "pv_tags = {chosen}"})
 	require.NoError(t, err)
 	require.Len(t, pvs, 1)
 	assert.Equal(t, first, pvs[0].Device)
@@ -288,7 +288,7 @@ func TestIntegrationSelectTargetsMatchingPVs(t *testing.T) {
 		AddTags: []string{"everywhere"},
 	}))
 
-	pvs, err = client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{Select: "pv_tags = @everywhere"})
+	pvs, err = client.ListPhysicalVolumes(ctx, ListPhysicalVolumesOptions{Select: "pv_tags = {everywhere}"})
 	require.NoError(t, err)
 	assert.Len(t, pvs, 2)
 }

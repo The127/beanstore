@@ -257,7 +257,7 @@ func TestChangePhysicalVolumeBySelect(t *testing.T) {
 	fake := &fakeRunner{}
 	client := New(WithRunner(fake))
 
-	err := client.ChangePhysicalVolume(t.Context(), Select("pv_tags = @retiring"), ChangePhysicalVolumeOptions{
+	err := client.ChangePhysicalVolume(t.Context(), Select("pv_tags = {retiring}"), ChangePhysicalVolumeOptions{
 		AddTags: []string{"drained"},
 	})
 
@@ -265,7 +265,7 @@ func TestChangePhysicalVolumeBySelect(t *testing.T) {
 	assert.Equal(t, []string{
 		"pvchange",
 		"--addtag", "drained",
-		"-S", "pv_tags = @retiring",
+		"-S", "pv_tags = {retiring}",
 	}, fake.calls[0].Args())
 }
 
