@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
+	"github.com/The127/beanstore/client"
 	beanstorev1 "github.com/The127/beanstore/client/gen/beanstore/v1"
 	"github.com/The127/beanstore/internal/operations"
 	"github.com/The127/beanstore/internal/storage"
@@ -341,6 +342,20 @@ func TestPushVolumeRefusesWrongState(t *testing.T) {
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 	op, _ := volumes.ops.Get("op-1")
 	assert.Equal(t, operations.Failed, op.Phase)
+}
+
+func TestPushVolumeRefusesSnapshots(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{snapshotLV("")}}
+	volumes, _ := testServer(t, fake)
+
+	request := pushRequest()
+	request.VolumeId = "snap-1"
+	_, err := volumes.PushVolume(t.Context(), request)
+
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	wrongState, ok := client.WrongState(err)
+	require.True(t, ok)
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_SNAPSHOT, wrongState.Found)
 }
 
 func TestPushVolumeValidation(t *testing.T) {

@@ -286,6 +286,100 @@ func TestIntegrationSnapshotExportRace(t *testing.T) {
 	waitDone(t, node.operations, "op-delete")
 }
 
+func TestIntegrationSnapshotCopy(t *testing.T) {
+	source := daemon(t)
+	target := daemon(t)
+	ctx := t.Context()
+
+	_, err := source.volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
+		VolumeId:    "vol-1",
+		SizeBytes:   16 << 20,
+		OperationId: "op-create",
+	})
+	require.NoError(t, err)
+	waitDone(t, source.operations, "op-create")
+
+	attach, err := source.volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "vol-1"})
+	require.NoError(t, err)
+	pattern := patternFile(t, 3<<20, 239)
+	require.NoError(t, sudoRun(ctx, "dd", "if="+pattern.path, "of="+attach.DevicePath, "bs=1M", "conv=fsync"))
+
+	_, err = source.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-1",
+	})
+	require.NoError(t, err)
+
+	// snapshots have no authority to move, PushVolume refuses them
+	_, err = source.volumes.PushVolume(ctx, &beanstorev1.PushVolumeRequest{
+		VolumeId:      "snap-1",
+		TransferId:    "tr-refused",
+		TargetAddress: target.address,
+		OperationId:   "op-push-snapshot",
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	wrongState, ok := client.WrongState(err)
+	require.True(t, ok)
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_SNAPSHOT, wrongState.Found)
+
+	// the copy path that works today: the caller pumps export frames
+	// into the target's transfer plane
+	frames, trailer := export(t, source, "snap-1")
+
+	_, err = target.volumes.PrepareReceive(ctx, &beanstorev1.PrepareReceiveRequest{
+		VolumeId:   "vol-copy",
+		SizeBytes:  trailer.SizeBytes,
+		TransferId: "tr-copy",
+	})
+	require.NoError(t, err)
+	require.NoError(t, sudoRun(ctx, "chmod", "o+rw", "/dev/"+target.vg+"/vol-copy"))
+
+	stream, err := target.transfers.Receive(ctx)
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(&beanstorev1.ReceiveRequest{
+		Content: &beanstorev1.ReceiveRequest_Header{Header: &beanstorev1.ReceiveHeader{TransferId: "tr-copy"}},
+	}))
+	for _, frame := range frames {
+		require.NoError(t, stream.Send(&beanstorev1.ReceiveRequest{
+			Content: &beanstorev1.ReceiveRequest_Frame{Frame: frame},
+		}))
+	}
+	_, err = stream.CloseAndRecv()
+	require.NoError(t, err)
+	_, err = target.transfers.CommitTransfer(ctx, &beanstorev1.CommitTransferRequest{
+		TransferId: "tr-copy",
+		Digest:     trailer.Digest,
+	})
+	require.NoError(t, err)
+
+	// the snapshot materialized as a full standalone volume
+	list, err := target.volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	require.Len(t, list.Volumes, 1)
+	assert.Equal(t, "vol-copy", list.Volumes[0].VolumeId)
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_READY, list.Volumes[0].State)
+	assert.Equal(t, uint64(16<<20), list.Volumes[0].SizeBytes)
+	assert.Empty(t, list.Volumes[0].OriginId, "the copy has no origin link")
+
+	_, err = target.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-copy",
+		SnapshotId: "snap-copy",
+	})
+	require.NoError(t, err)
+	_, copyTrailer := export(t, target, "snap-copy")
+	assert.Equal(t, trailer.Digest, copyTrailer.Digest, "the copy carries the snapshot content")
+
+	// a copy moves nothing, the source keeps volume and snapshot
+	list, err = source.volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	states := map[string]beanstorev1.VolumeState{}
+	for _, volume := range list.Volumes {
+		states[volume.VolumeId] = volume.State
+	}
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_ATTACHED, states["vol-1"])
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_SNAPSHOT, states["snap-1"])
+}
+
 func TestIntegrationSnapshotRecovery(t *testing.T) {
 	lvmClient, cfg := provision(t)
 	ctx := t.Context()
