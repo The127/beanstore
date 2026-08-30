@@ -6,6 +6,7 @@ import (
 	"io"
 	"regexp"
 	"runtime/debug"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -28,6 +29,10 @@ type volumeServiceServer struct {
 	transfers *storage.Transfers
 	// background outlives requests, long-running operations run on it.
 	background context.Context
+	// dial connects to a push target, tests replace it.
+	dial func(target string) (*grpc.ClientConn, error)
+	// pushRetryDelay spaces the retries of one push.
+	pushRetryDelay time.Duration
 }
 
 type operationServiceServer struct {
@@ -49,6 +54,7 @@ func Register(ctx context.Context, server *grpc.Server, client *lvm.Client, cfg 
 	beanstorev1.RegisterVolumeServiceServer(server, &volumeServiceServer{
 		lvm: client, cfg: cfg, ops: ops, pins: storage.NewExportPins(),
 		transfers: transfers, background: ctx,
+		dial: dialTarget, pushRetryDelay: pushRetryDelay,
 	})
 	beanstorev1.RegisterOperationServiceServer(server, &operationServiceServer{ops: ops})
 	beanstorev1.RegisterTransferServiceServer(server, &transferServiceServer{transfers: transfers})

@@ -39,6 +39,9 @@ type Transfers struct {
 	mu       sync.Mutex
 	sessions map[string]*transferSession
 	dead     map[string]bool
+	// committed marks dead transfers that committed, so a commit
+	// whose response was lost can be repeated.
+	committed map[string]bool
 }
 
 type transferSession struct {
@@ -61,6 +64,7 @@ func NewTransfers(ctx context.Context, client *lvm.Client, cfg config.Config) *T
 		background: ctx,
 		sessions:   map[string]*transferSession{},
 		dead:       map[string]bool{},
+		committed:  map[string]bool{},
 	}
 }
 
@@ -212,11 +216,16 @@ func (t *Transfers) Write(transferID string, offset uint64, data []byte) error {
 
 // Commit verifies the digest, makes the volume durable and retags it
 // READY. The transfer ends either way, a mismatch destroys it.
+// Committing an already committed transfer succeeds again.
 func (t *Transfers) Commit(ctx context.Context, transferID string, digest []byte) error {
 	t.mu.Lock()
 	session := t.sessions[transferID]
 	if session == nil || session.terminal || session.streaming {
+		committed := t.committed[transferID]
 		t.mu.Unlock()
+		if committed {
+			return nil
+		}
 		if session != nil && session.streaming {
 			return fmt.Errorf("%w: %s", ErrTransferBusy, transferID)
 		}
@@ -260,6 +269,9 @@ func (t *Transfers) Commit(ctx context.Context, transferID string, digest []byte
 		return fmt.Errorf("readying received volume: %w", err)
 	}
 
+	t.mu.Lock()
+	t.committed[transferID] = true
+	t.mu.Unlock()
 	t.finish(transferID)
 
 	return nil

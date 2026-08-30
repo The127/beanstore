@@ -40,7 +40,8 @@ type TransferServiceClient interface {
 	// time per transfer, a reconnect continues at the queried offset.
 	Receive(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ReceiveRequest, ReceiveResponse], error)
 	// CommitTransfer verifies the digest and turns the INCOMING volume
-	// READY. A digest mismatch answers DATA_LOSS.
+	// READY. A digest mismatch answers DATA_LOSS. Repeating the commit
+	// of an already committed transfer answers OK.
 	CommitTransfer(ctx context.Context, in *CommitTransferRequest, opts ...grpc.CallOption) (*CommitTransferResponse, error)
 	// AbortTransfer destroys the transfer and its volume. Idempotent,
 	// aborting an unknown or finished transfer succeeds.
@@ -113,7 +114,8 @@ type TransferServiceServer interface {
 	// time per transfer, a reconnect continues at the queried offset.
 	Receive(grpc.ClientStreamingServer[ReceiveRequest, ReceiveResponse]) error
 	// CommitTransfer verifies the digest and turns the INCOMING volume
-	// READY. A digest mismatch answers DATA_LOSS.
+	// READY. A digest mismatch answers DATA_LOSS. Repeating the commit
+	// of an already committed transfer answers OK.
 	CommitTransfer(context.Context, *CommitTransferRequest) (*CommitTransferResponse, error)
 	// AbortTransfer destroys the transfer and its volume. Idempotent,
 	// aborting an unknown or finished transfer succeeds.

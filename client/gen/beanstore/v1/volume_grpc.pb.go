@@ -30,6 +30,7 @@ const (
 	VolumeService_DeleteSnapshot_FullMethodName = "/beanstore.v1.VolumeService/DeleteSnapshot"
 	VolumeService_Export_FullMethodName         = "/beanstore.v1.VolumeService/Export"
 	VolumeService_PrepareReceive_FullMethodName = "/beanstore.v1.VolumeService/PrepareReceive"
+	VolumeService_PushVolume_FullMethodName     = "/beanstore.v1.VolumeService/PushVolume"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -71,6 +72,10 @@ type VolumeServiceClient interface {
 	// PrepareReceive creates an INCOMING volume for a transfer. Refused
 	// beyond the node's inbound transfer limit.
 	PrepareReceive(ctx context.Context, in *PrepareReceiveRequest, opts ...grpc.CallOption) (*PrepareReceiveResponse, error)
+	// PushVolume streams a READY volume into a transfer prepared on the
+	// target node and retires it once the commit lands. Progress is
+	// reported on the operation.
+	PushVolume(ctx context.Context, in *PushVolumeRequest, opts ...grpc.CallOption) (*PushVolumeResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -200,6 +205,16 @@ func (c *volumeServiceClient) PrepareReceive(ctx context.Context, in *PrepareRec
 	return out, nil
 }
 
+func (c *volumeServiceClient) PushVolume(ctx context.Context, in *PushVolumeRequest, opts ...grpc.CallOption) (*PushVolumeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PushVolumeResponse)
+	err := c.cc.Invoke(ctx, VolumeService_PushVolume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -239,6 +254,10 @@ type VolumeServiceServer interface {
 	// PrepareReceive creates an INCOMING volume for a transfer. Refused
 	// beyond the node's inbound transfer limit.
 	PrepareReceive(context.Context, *PrepareReceiveRequest) (*PrepareReceiveResponse, error)
+	// PushVolume streams a READY volume into a transfer prepared on the
+	// target node and retires it once the commit lands. Progress is
+	// reported on the operation.
+	PushVolume(context.Context, *PushVolumeRequest) (*PushVolumeResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -281,6 +300,9 @@ func (UnimplementedVolumeServiceServer) Export(*ExportRequest, grpc.ServerStream
 }
 func (UnimplementedVolumeServiceServer) PrepareReceive(context.Context, *PrepareReceiveRequest) (*PrepareReceiveResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrepareReceive not implemented")
+}
+func (UnimplementedVolumeServiceServer) PushVolume(context.Context, *PushVolumeRequest) (*PushVolumeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PushVolume not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -494,6 +516,24 @@ func _VolumeService_PrepareReceive_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_PushVolume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PushVolumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).PushVolume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_PushVolume_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).PushVolume(ctx, req.(*PushVolumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -540,6 +580,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PrepareReceive",
 			Handler:    _VolumeService_PrepareReceive_Handler,
+		},
+		{
+			MethodName: "PushVolume",
+			Handler:    _VolumeService_PushVolume_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -51,6 +51,11 @@ service VolumeService {
   // PrepareReceive creates an INCOMING volume for a transfer. Refused
   // beyond the node's inbound transfer limit.
   rpc PrepareReceive(PrepareReceiveRequest) returns (PrepareReceiveResponse);
+
+  // PushVolume streams a READY volume into a transfer prepared on the
+  // target node and retires it once the commit lands. Progress is
+  // reported on the operation.
+  rpc PushVolume(PushVolumeRequest) returns (PushVolumeResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -155,6 +160,16 @@ message PrepareReceiveRequest {
 }
 
 message PrepareReceiveResponse {}
+
+message PushVolumeRequest {
+  string volume_id = 1;
+  string transfer_id = 2;
+  // target_address is the destination node's grpc address.
+  string target_address = 3;
+  string operation_id = 4;
+}
+
+message PushVolumeResponse {}
 
 message GetNodeStatusRequest {}
 

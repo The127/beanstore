@@ -102,7 +102,7 @@ func TestTransferLifecycle(t *testing.T) {
 	assert.Contains(t, readied, "--deltag beanstore.state=incoming")
 	assert.Contains(t, readied, "--deltag beanstore.transfer=tr-1")
 
-	assert.ErrorIs(t, transfers.Commit(t.Context(), "tr-1", nil), ErrTransferUnknown)
+	assert.NoError(t, transfers.Commit(t.Context(), "tr-1", nil), "a repeated commit answers OK")
 	assert.ErrorIs(t, transfers.PrepareReceive(t.Context(), "tr-1", "vol-3", size), ErrTransferUsed)
 }
 
@@ -114,6 +114,8 @@ func TestCommitRefusesDigestMismatch(t *testing.T) {
 
 	assert.ErrorIs(t, err, ErrDigestMismatch)
 	assert.Contains(t, fake.commands(), "lvremove -f vg0/vol-2", "the mismatch destroys the transfer")
+	assert.ErrorIs(t, transfers.Commit(t.Context(), "tr-1", nil), ErrTransferUnknown,
+		"a destroyed transfer never turns committable")
 }
 
 func TestPrepareReceiveEnforcesLimit(t *testing.T) {

@@ -33,7 +33,8 @@ service TransferService {
   rpc Receive(stream ReceiveRequest) returns (ReceiveResponse);
 
   // CommitTransfer verifies the digest and turns the INCOMING volume
-  // READY. A digest mismatch answers DATA_LOSS.
+  // READY. A digest mismatch answers DATA_LOSS. Repeating the commit
+  // of an already committed transfer answers OK.
   rpc CommitTransfer(CommitTransferRequest) returns (CommitTransferResponse);
 
   // AbortTransfer destroys the transfer and its volume. Idempotent,
