@@ -240,7 +240,12 @@ func (s *volumeServiceServer) resolvePush(conn *grpc.ClientConn, id, transferID,
 		return
 	}
 
-	for _, volume := range response.Volumes {
+	s.settlePush(conn, response.Volumes, id, transferID, operationID, commitErr)
+}
+
+// settlePush applies the target's answer to a COMMITTING volume.
+func (s *volumeServiceServer) settlePush(conn *grpc.ClientConn, listed []*beanstorev1.Volume, id, transferID, operationID string, commitErr error) {
+	for _, volume := range listed {
 		if volume.VolumeId == id && volume.State != beanstorev1.VolumeState_VOLUME_STATE_INCOMING {
 			s.retirePushed(id, operationID)
 

@@ -36,6 +36,7 @@ type fakeTarget struct {
 	dropStreams int
 	commitCodes []codes.Code
 	listed      []*beanstorev1.Volume
+	listErrs    int
 
 	nextOffset   uint64
 	streams      int
@@ -114,7 +115,20 @@ func (f *fakeTarget) ListVolumes(_ context.Context, _ *beanstorev1.ListVolumesRe
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if f.listErrs > 0 {
+		f.listErrs--
+
+		return nil, status.Error(codes.Unavailable, "scripted list refusal")
+	}
+
 	return &beanstorev1.ListVolumesResponse{Volumes: f.listed}, nil
+}
+
+func (f *fakeTarget) abortCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return f.aborts
 }
 
 func pushHarness(t *testing.T, fake *fakeRunner, target *fakeTarget) *volumeServiceServer {

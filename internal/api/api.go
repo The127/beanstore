@@ -33,6 +33,9 @@ type volumeServiceServer struct {
 	dial func(target string) (*grpc.ClientConn, error)
 	// pushRetryDelay spaces the retries of one push.
 	pushRetryDelay time.Duration
+	// resolveRetryDelay spaces the resolution attempts of recovered
+	// COMMITTING volumes.
+	resolveRetryDelay time.Duration
 }
 
 type operationServiceServer struct {
@@ -51,13 +54,16 @@ type transferServiceServer struct {
 func Register(ctx context.Context, server *grpc.Server, client *lvm.Client, cfg config.Config) {
 	ops := operations.NewTable()
 	transfers := storage.NewTransfers(ctx, client, cfg)
-	beanstorev1.RegisterVolumeServiceServer(server, &volumeServiceServer{
+	volumes := &volumeServiceServer{
 		lvm: client, cfg: cfg, ops: ops, pins: storage.NewExportPins(),
 		transfers: transfers, background: ctx,
-		dial: dialTarget, pushRetryDelay: pushRetryDelay,
-	})
+		dial: dialTarget, pushRetryDelay: pushRetryDelay, resolveRetryDelay: resolveRetryDelay,
+	}
+	beanstorev1.RegisterVolumeServiceServer(server, volumes)
 	beanstorev1.RegisterOperationServiceServer(server, &operationServiceServer{ops: ops})
 	beanstorev1.RegisterTransferServiceServer(server, &transferServiceServer{transfers: transfers})
+
+	go volumes.resolveRecovered()
 }
 
 // volumeIDPattern is the lv name charset, minus a leading dash or dot.
