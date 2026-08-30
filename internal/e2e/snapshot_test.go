@@ -460,6 +460,74 @@ func TestIntegrationSnapshotPush(t *testing.T) {
 	require.NoError(t, err, "the finished push released its pin")
 }
 
+func TestIntegrationSnapshotPushEdges(t *testing.T) {
+	source := daemon(t)
+	target := daemon(t)
+	ctx := t.Context()
+
+	_, err := source.volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
+		VolumeId:    "vol-1",
+		SizeBytes:   16 << 20,
+		OperationId: "op-create",
+	})
+	require.NoError(t, err)
+	waitDone(t, source.operations, "op-create")
+
+	_, err = source.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-1",
+	})
+	require.NoError(t, err)
+
+	_, err = source.volumes.PushSnapshot(ctx, &beanstorev1.PushSnapshotRequest{
+		SnapshotId:    "snap-9",
+		TransferId:    "tr-unknown",
+		TargetAddress: target.address,
+		OperationId:   "op-push-unknown",
+	})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	// the refused push consumed its operation id
+	_, err = source.volumes.PushSnapshot(ctx, &beanstorev1.PushSnapshotRequest{
+		SnapshotId:    "snap-9",
+		TransferId:    "tr-unknown",
+		TargetAddress: target.address,
+		OperationId:   "op-push-unknown",
+	})
+	assert.Equal(t, codes.AlreadyExists, status.Code(err))
+
+	_, err = source.volumes.PushSnapshot(ctx, &beanstorev1.PushSnapshotRequest{
+		SnapshotId:    "snap-1",
+		TransferId:    "tr-bad-address",
+		TargetAddress: "not an address",
+		OperationId:   "op-push-bad-address",
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+
+	// the target never prepared this transfer, the push fails and the
+	// snapshot survives unpinned
+	_, err = source.volumes.PushSnapshot(ctx, &beanstorev1.PushSnapshotRequest{
+		SnapshotId:    "snap-1",
+		TransferId:    "tr-unprepared",
+		TargetAddress: target.address,
+		OperationId:   "op-push-unprepared",
+	})
+	require.NoError(t, err)
+	reason := waitFailed(t, source.operations, "op-push-unprepared")
+	assert.Contains(t, reason, "unknown transfer")
+
+	list, err := source.volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	states := map[string]beanstorev1.VolumeState{}
+	for _, volume := range list.Volumes {
+		states[volume.VolumeId] = volume.State
+	}
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_SNAPSHOT, states["snap-1"], "the failed copy changed nothing")
+
+	_, err = source.volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
+	require.NoError(t, err, "the failed push released its pin")
+}
+
 func TestIntegrationSnapshotRecovery(t *testing.T) {
 	lvmClient, cfg := provision(t)
 	ctx := t.Context()
