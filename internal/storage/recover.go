@@ -11,8 +11,10 @@ import (
 // Recover applies the crash rules to every volume at startup: creating
 // volumes are unfinished garbage and removed, deleting volumes finish
 // their removal, attached volumes are re-activated since activation
-// does not survive a reboot. Per volume failures are logged and leave
-// the volume in its state, the remaining volumes still recover.
+// does not survive a reboot, pushing volumes revert to ready.
+// Committing volumes stay put until the push resolver settles them.
+// Per volume failures are logged and leave the volume in its state,
+// the remaining volumes still recover.
 func Recover(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 	volumes, err := ListVolumes(ctx, client, cfg)
 	if err != nil {
@@ -58,7 +60,7 @@ func Recover(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 
 		case StateIncoming:
 			// no transfer session survives a restart
-			err = DestroyIncoming(ctx, client, cfg, volume.ID)
+			err = RemoveVolume(ctx, client, cfg, volume.ID)
 			if err != nil {
 				log.Error("removing incoming volume during recovery",
 					"volume", volume.ID, "error", err)
@@ -66,9 +68,24 @@ func Recover(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 			}
 			log.Info("removed incoming volume during recovery", "volume", volume.ID)
 
-		case StateReady:
+		case StatePushing:
+			// safe, the commit was never sent
+			err = AbortPush(ctx, client, cfg, volume.ID)
+			if err != nil {
+				log.Error("reverting pushing volume during recovery",
+					"volume", volume.ID, "error", err)
+				continue
+			}
+			log.Info("reverted pushing volume during recovery", "volume", volume.ID)
 
-		case StatePushing, StateRetired, StateUnknown:
+		case StateCommitting:
+			// commit outcome unknown, the resolver settles it
+			log.Info("committing volume awaits push resolution",
+				"volume", volume.ID, "target", volume.PushTarget)
+
+		case StateReady, StateRetired:
+
+		case StateUnknown:
 			log.Warn("volume not covered by recovery",
 				"volume", volume.ID, "state", string(volume.State))
 		}

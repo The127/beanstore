@@ -35,6 +35,9 @@ const (
 	VolumeState_VOLUME_STATE_RETIRED     VolumeState = 6
 	VolumeState_VOLUME_STATE_DELETING    VolumeState = 7
 	VolumeState_VOLUME_STATE_SNAPSHOT    VolumeState = 8
+	// COMMITTING is a pushed volume whose commit outcome is unknown.
+	// The source resolves it against the target after a restart.
+	VolumeState_VOLUME_STATE_COMMITTING VolumeState = 9
 )
 
 // Enum value maps for VolumeState.
@@ -49,6 +52,7 @@ var (
 		6: "VOLUME_STATE_RETIRED",
 		7: "VOLUME_STATE_DELETING",
 		8: "VOLUME_STATE_SNAPSHOT",
+		9: "VOLUME_STATE_COMMITTING",
 	}
 	VolumeState_value = map[string]int32{
 		"VOLUME_STATE_UNSPECIFIED": 0,
@@ -60,6 +64,7 @@ var (
 		"VOLUME_STATE_RETIRED":     6,
 		"VOLUME_STATE_DELETING":    7,
 		"VOLUME_STATE_SNAPSHOT":    8,
+		"VOLUME_STATE_COMMITTING":  9,
 	}
 )
 
@@ -1637,7 +1642,7 @@ const file_beanstore_v1_volume_proto_rawDesc = "" +
 	"bytes_done\x18\x01 \x01(\x04R\tbytesDone\"\x0f\n" +
 	"\rOperationDone\")\n" +
 	"\x0fOperationFailed\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason*\xfe\x01\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason*\x9b\x02\n" +
 	"\vVolumeState\x12\x1c\n" +
 	"\x18VOLUME_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15VOLUME_STATE_CREATING\x10\x01\x12\x16\n" +
@@ -1647,7 +1652,8 @@ const file_beanstore_v1_volume_proto_rawDesc = "" +
 	"\x15VOLUME_STATE_INCOMING\x10\x05\x12\x18\n" +
 	"\x14VOLUME_STATE_RETIRED\x10\x06\x12\x19\n" +
 	"\x15VOLUME_STATE_DELETING\x10\a\x12\x19\n" +
-	"\x15VOLUME_STATE_SNAPSHOT\x10\b2\xaa\a\n" +
+	"\x15VOLUME_STATE_SNAPSHOT\x10\b\x12\x1b\n" +
+	"\x17VOLUME_STATE_COMMITTING\x10\t2\xaa\a\n" +
 	"\rVolumeService\x12U\n" +
 	"\fCreateVolume\x12!.beanstore.v1.CreateVolumeRequest\x1a\".beanstore.v1.CreateVolumeResponse\x12R\n" +
 	"\vListVolumes\x12 .beanstore.v1.ListVolumesRequest\x1a!.beanstore.v1.ListVolumesResponse\x12X\n" +

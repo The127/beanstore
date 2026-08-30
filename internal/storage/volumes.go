@@ -16,15 +16,16 @@ type State string
 // State values. StateUnknown marks a beanstore volume whose state tag
 // value is unreadable.
 const (
-	StateCreating State = "creating"
-	StateReady    State = "ready"
-	StateAttached State = "attached"
-	StatePushing  State = "pushing"
-	StateIncoming State = "incoming"
-	StateRetired  State = "retired"
-	StateDeleting State = "deleting"
-	StateSnapshot State = "snapshot"
-	StateUnknown  State = ""
+	StateCreating   State = "creating"
+	StateReady      State = "ready"
+	StateAttached   State = "attached"
+	StatePushing    State = "pushing"
+	StateCommitting State = "committing"
+	StateIncoming   State = "incoming"
+	StateRetired    State = "retired"
+	StateDeleting   State = "deleting"
+	StateSnapshot   State = "snapshot"
+	StateUnknown    State = ""
 )
 
 // stateTagPrefix marks an lv as beanstore owned.
@@ -46,6 +47,12 @@ type Volume struct {
 	// Origin names a snapshot's origin volume, empty otherwise.
 	Origin string
 	Active bool
+	// Transfer is the transfer id of an INCOMING, PUSHING or
+	// COMMITTING volume, empty otherwise.
+	Transfer string
+	// PushTarget is the destination address of a PUSHING or
+	// COMMITTING volume, empty otherwise.
+	PushTarget string
 }
 
 // ErrNotFound reports that no beanstore volume with the given id
@@ -82,20 +89,12 @@ func ListVolumes(ctx context.Context, client *lvm.Client, cfg config.Config) ([]
 
 	var volumes []Volume
 	for _, lv := range lvs {
-		state, owned := stateOf(lv.Tags)
+		_, owned := stateOf(lv.Tags)
 		if !owned {
 			continue
 		}
 
-		volumes = append(volumes, Volume{
-			ID:        lv.Name,
-			State:     state,
-			SizeBytes: lv.SizeBytes,
-			UsedBytes: uint64(float64(lv.SizeBytes) * lv.DataPercent / 100),
-			Path:      lv.Path,
-			Origin:    lv.Origin,
-			Active:    lv.Active,
-		})
+		volumes = append(volumes, volumeFromLV(lv))
 	}
 
 	return volumes, nil
@@ -151,20 +150,39 @@ func GetVolume(ctx context.Context, client *lvm.Client, cfg config.Config, id st
 		return Volume{}, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
 
-	state, owned := stateOf(lvs[0].Tags)
+	_, owned := stateOf(lvs[0].Tags)
 	if !owned {
 		return Volume{}, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
 
+	return volumeFromLV(lvs[0]), nil
+}
+
+func volumeFromLV(lv lvm.LogicalVolume) Volume {
+	state, _ := stateOf(lv.Tags)
+
 	return Volume{
-		ID:        lvs[0].Name,
-		State:     state,
-		SizeBytes: lvs[0].SizeBytes,
-		UsedBytes: uint64(float64(lvs[0].SizeBytes) * lvs[0].DataPercent / 100),
-		Path:      lvs[0].Path,
-		Origin:    lvs[0].Origin,
-		Active:    lvs[0].Active,
-	}, nil
+		ID:         lv.Name,
+		State:      state,
+		SizeBytes:  lv.SizeBytes,
+		UsedBytes:  uint64(float64(lv.SizeBytes) * lv.DataPercent / 100),
+		Path:       lv.Path,
+		Origin:     lv.Origin,
+		Active:     lv.Active,
+		Transfer:   tagValue(lv.Tags, transferTagPrefix),
+		PushTarget: tagValue(lv.Tags, targetTagPrefix),
+	}
+}
+
+func tagValue(tags []string, prefix string) string {
+	for _, tag := range tags {
+		value, found := strings.CutPrefix(tag, prefix)
+		if found {
+			return value
+		}
+	}
+
+	return ""
 }
 
 // SnapshotsOf lists the ids of the volume's snapshots.
@@ -437,14 +455,15 @@ func stateOf(tags []string) (State, bool) {
 }
 
 var knownStates = map[State]bool{
-	StateCreating: true,
-	StateReady:    true,
-	StateAttached: true,
-	StatePushing:  true,
-	StateIncoming: true,
-	StateRetired:  true,
-	StateDeleting: true,
-	StateSnapshot: true,
+	StateCreating:   true,
+	StateReady:      true,
+	StateAttached:   true,
+	StatePushing:    true,
+	StateCommitting: true,
+	StateIncoming:   true,
+	StateRetired:    true,
+	StateDeleting:   true,
+	StateSnapshot:   true,
 }
 
 func knownState(value string) State {

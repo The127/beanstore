@@ -27,13 +27,6 @@ var (
 	ErrDigestMismatch  = errors.New("digest mismatch")
 )
 
-// DestroyIncoming removes an incoming volume. Every INCOMING removal
-// goes through here, the move outcome log will hook in before the
-// removal.
-func DestroyIncoming(ctx context.Context, client *lvm.Client, cfg config.Config, id string) error {
-	return RemoveVolume(ctx, client, cfg, id)
-}
-
 // Transfers tracks the node's live inbound transfers. Sessions are
 // volatile, a restart forgets them and recovery removes their
 // volumes.
@@ -329,7 +322,7 @@ func (t *Transfers) destroy(transferID string) {
 
 	t.finish(transferID)
 
-	err := DestroyIncoming(t.background, t.client, t.cfg, volumeID)
+	err := RemoveVolume(t.background, t.client, t.cfg, volumeID)
 	if err != nil {
 		logging.FromContext(t.background).Error("removing incoming volume",
 			"transfer", transferID, "volume", volumeID, "error", err)

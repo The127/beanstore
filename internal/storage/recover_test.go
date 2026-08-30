@@ -46,3 +46,46 @@ func TestRecoverAppliesCrashRules(t *testing.T) {
 	assert.Contains(t, strings.Join(fake.calls[2].Args(), " "), "vg0/vol-attached")
 	assert.Equal(t, []string{"lvremove", "-f", "vg0/vol-deleting"}, fake.calls[3].Args())
 }
+
+const pushStates = `{"report": [{"lv": [
+	{"lv_name": "vol-pushing", "lv_uuid": "u1", "vg_name": "vg0",
+	 "lv_size": "1048576", "lv_attr": "Vwi-a-tz--",
+	 "lv_tags": "beanstore.state=pushing,beanstore.transfer=tr-1,beanstore.target=10.0.0.9:50051",
+	 "pool_lv": "pool0", "origin": "", "lv_path": "/dev/vg0/vol-pushing",
+	 "lv_dm_path": "", "data_percent": "1.00", "metadata_percent": "",
+	 "lv_active": "active", "lv_layout": "thin,sparse"},
+	{"lv_name": "vol-committing", "lv_uuid": "u2", "vg_name": "vg0",
+	 "lv_size": "1048576", "lv_attr": "Vwi---tz--",
+	 "lv_tags": "beanstore.state=committing,beanstore.transfer=tr-2,beanstore.target=10.0.0.9:50051",
+	 "pool_lv": "pool0", "origin": "", "lv_path": "", "lv_dm_path": "",
+	 "data_percent": "", "metadata_percent": "", "lv_active": "",
+	 "lv_layout": "thin,sparse"}
+]}], "log": []}`
+
+const pushingSingle = `{"report": [{"lv": [
+	{"lv_name": "vol-pushing", "lv_uuid": "u1", "vg_name": "vg0",
+	 "lv_size": "1048576", "lv_attr": "Vwi-a-tz--",
+	 "lv_tags": "beanstore.state=pushing,beanstore.transfer=tr-1,beanstore.target=10.0.0.9:50051",
+	 "pool_lv": "pool0", "origin": "", "lv_path": "/dev/vg0/vol-pushing",
+	 "lv_dm_path": "", "data_percent": "1.00", "metadata_percent": "",
+	 "lv_active": "active", "lv_layout": "thin,sparse"}
+]}], "log": []}`
+
+func TestRecoverRevertsPushingKeepsCommitting(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{pushStates, pushingSingle, "", ""}}
+	client := lvm.New(lvm.WithRunner(fake))
+
+	err := Recover(t.Context(), client, testConfig())
+
+	require.NoError(t, err)
+	require.Len(t, fake.calls, 4, "scan, lookup, deactivate, retag, nothing for committing")
+	deactivated := strings.Join(fake.calls[2].Args(), " ")
+	assert.Contains(t, deactivated, "-a n")
+	assert.Contains(t, deactivated, "vg0/vol-pushing")
+
+	retagged := strings.Join(fake.calls[3].Args(), " ")
+	assert.Contains(t, retagged, "--addtag beanstore.state=ready")
+	assert.Contains(t, retagged, "--deltag beanstore.state=pushing")
+	assert.Contains(t, retagged, "--deltag beanstore.transfer=tr-1")
+	assert.Contains(t, retagged, "--deltag beanstore.target=10.0.0.9:50051")
+}

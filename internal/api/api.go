@@ -549,6 +549,9 @@ func protoState(state storage.State) beanstorev1.VolumeState {
 	case storage.StatePushing:
 		return beanstorev1.VolumeState_VOLUME_STATE_PUSHING
 
+	case storage.StateCommitting:
+		return beanstorev1.VolumeState_VOLUME_STATE_COMMITTING
+
 	case storage.StateIncoming:
 		return beanstorev1.VolumeState_VOLUME_STATE_INCOMING
 

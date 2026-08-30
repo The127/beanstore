@@ -71,6 +71,9 @@ enum VolumeState {
   VOLUME_STATE_RETIRED = 6;
   VOLUME_STATE_DELETING = 7;
   VOLUME_STATE_SNAPSHOT = 8;
+  // COMMITTING is a pushed volume whose commit outcome is unknown.
+  // The source resolves it against the target after a restart.
+  VOLUME_STATE_COMMITTING = 9;
 }
 
 message Volume {
