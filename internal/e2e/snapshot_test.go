@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -526,6 +527,66 @@ func TestIntegrationSnapshotPushEdges(t *testing.T) {
 
 	_, err = source.volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
 	require.NoError(t, err, "the failed push released its pin")
+}
+
+func TestIntegrationSnapshotPushPinsDuringRetries(t *testing.T) {
+	source := daemon(t)
+	ctx := t.Context()
+
+	_, err := source.volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
+		VolumeId:    "vol-1",
+		SizeBytes:   16 << 20,
+		OperationId: "op-create",
+	})
+	require.NoError(t, err)
+	waitDone(t, source.operations, "op-create")
+
+	_, err = source.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-1",
+	})
+	require.NoError(t, err)
+
+	dead, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	deadAddress := dead.Addr().String()
+	require.NoError(t, dead.Close())
+
+	// the pin is taken before the verb answers, so the push provably
+	// holds it while its retries run against the dead address
+	_, err = source.volumes.PushSnapshot(ctx, &beanstorev1.PushSnapshotRequest{
+		SnapshotId:    "snap-1",
+		TransferId:    "tr-nowhere",
+		TargetAddress: deadAddress,
+		OperationId:   "op-push-nowhere",
+	})
+	require.NoError(t, err)
+
+	_, err = source.volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
+	assert.Equal(t, codes.Aborted, status.Code(err), "the running push blocks the delete")
+
+	_, err = source.volumes.DeleteVolume(ctx, &beanstorev1.DeleteVolumeRequest{
+		VolumeId:    "vol-1",
+		OperationId: "op-delete-pinned",
+		Force:       true,
+	})
+	assert.Equal(t, codes.Aborted, status.Code(err), "the running push blocks the cascade")
+
+	waitFailed(t, source.operations, "op-push-nowhere")
+
+	_, err = source.volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
+	require.NoError(t, err, "the exhausted push released its pin")
+
+	_, err = source.volumes.DeleteVolume(ctx, &beanstorev1.DeleteVolumeRequest{
+		VolumeId:    "vol-1",
+		OperationId: "op-delete",
+	})
+	require.NoError(t, err)
+	waitDone(t, source.operations, "op-delete")
+
+	list, err := source.volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	assert.Empty(t, list.Volumes)
 }
 
 func TestIntegrationSnapshotRecovery(t *testing.T) {
