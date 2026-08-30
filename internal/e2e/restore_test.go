@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	beanstorev1 "github.com/The127/beanstore/client/gen/beanstore/v1"
 )
@@ -78,6 +80,90 @@ func TestIntegrationCreateVolumeFromSnapshot(t *testing.T) {
 	copyAttach, err := node.volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "vol-copy"})
 	require.NoError(t, err)
 	assert.Equal(t, pattern.bytes, readDevice(t, copyAttach.DevicePath, len(pattern.bytes)))
+}
+
+func TestIntegrationRestoreEdges(t *testing.T) {
+	node := daemon(t)
+	ctx := t.Context()
+
+	for _, id := range []string{"vol-1", "vol-2"} {
+		_, err := node.volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
+			VolumeId:    id,
+			SizeBytes:   16 << 20,
+			OperationId: "op-create-" + id,
+		})
+		require.NoError(t, err)
+		waitDone(t, node.operations, "op-create-"+id)
+	}
+	_, err := node.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-1",
+	})
+	require.NoError(t, err)
+	_, err = node.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-sib",
+	})
+	require.NoError(t, err)
+	_, err = node.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-2",
+		SnapshotId: "snap-other",
+	})
+	require.NoError(t, err)
+
+	// rollback refusals
+	_, err = node.volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "vol-1"})
+	require.NoError(t, err)
+	_, err = node.volumes.RollbackVolume(ctx, &beanstorev1.RollbackVolumeRequest{
+		VolumeId: "vol-1", SourceSnapshotId: "snap-1",
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err), "rollback is detached only")
+	_, err = node.volumes.Detach(ctx, &beanstorev1.DetachRequest{VolumeId: "vol-1"})
+	require.NoError(t, err)
+
+	_, err = node.volumes.RollbackVolume(ctx, &beanstorev1.RollbackVolumeRequest{
+		VolumeId: "vol-1", SourceSnapshotId: "snap-other",
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.ErrorContains(t, err, "does not belong")
+
+	_, err = node.volumes.RollbackVolume(ctx, &beanstorev1.RollbackVolumeRequest{
+		VolumeId: "vol-1", SourceSnapshotId: "snap-9",
+	})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	// copy refusals
+	_, err = node.volumes.CreateVolumeFromSnapshot(ctx, &beanstorev1.CreateVolumeFromSnapshotRequest{
+		VolumeId: "vol-2", SourceSnapshotId: "snap-1", OperationId: "op-taken",
+	})
+	assert.Equal(t, codes.AlreadyExists, status.Code(err), "the volume name is taken")
+
+	_, err = node.volumes.CreateVolumeFromSnapshot(ctx, &beanstorev1.CreateVolumeFromSnapshotRequest{
+		VolumeId: "vol-3", SourceSnapshotId: "vol-2", OperationId: "op-from-volume",
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err), "only snapshots copy")
+
+	// rollback leaves the sibling snapshot first class
+	_, err = node.volumes.RollbackVolume(ctx, &beanstorev1.RollbackVolumeRequest{
+		VolumeId: "vol-1", SourceSnapshotId: "snap-1",
+	})
+	require.NoError(t, err)
+
+	list, err := node.volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	states := map[string]*beanstorev1.Volume{}
+	for _, volume := range list.Volumes {
+		states[volume.VolumeId] = volume
+	}
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_SNAPSHOT, states["snap-sib"].State)
+	assert.Equal(t, "vol-1", states["snap-sib"].OriginId, "the sibling keeps its lineage")
+
+	_, err = node.volumes.DeleteVolume(ctx, &beanstorev1.DeleteVolumeRequest{
+		VolumeId:    "vol-1",
+		OperationId: "op-delete-guarded",
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err),
+		"the siblings still guard the rolled back volume")
 }
 
 func TestIntegrationRollbackVolume(t *testing.T) {
