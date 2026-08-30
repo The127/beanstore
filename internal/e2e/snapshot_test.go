@@ -222,6 +222,10 @@ func TestIntegrationSnapshotExportRace(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// detached, so only the export pin can refuse the deletes below
+	_, err = node.volumes.Detach(ctx, &beanstorev1.DetachRequest{VolumeId: "vol-1"})
+	require.NoError(t, err)
+
 	require.NoError(t, node.lvm.ActivateLogicalVolume(ctx, lvm.Name(node.vg+"/snap-1"),
 		lvm.ActivateLogicalVolumeOptions{IgnoreActivationSkip: true}))
 	require.NoError(t, sudoRun(ctx, "chmod", "o+r", "/dev/"+node.vg+"/snap-1"))
@@ -274,8 +278,6 @@ func TestIntegrationSnapshotExportRace(t *testing.T) {
 	_, err = node.volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
 	require.NoError(t, err, "the last pin released the snapshot")
 
-	_, err = node.volumes.Detach(ctx, &beanstorev1.DetachRequest{VolumeId: "vol-1"})
-	require.NoError(t, err)
 	_, err = node.volumes.DeleteVolume(ctx, &beanstorev1.DeleteVolumeRequest{
 		VolumeId:    "vol-1",
 		OperationId: "op-delete",
