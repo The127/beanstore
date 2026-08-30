@@ -36,6 +36,23 @@ type Config struct {
 	// TransferGrace is how long a dropped transfer stream may resume
 	// before the transfer is destroyed.
 	TransferGrace time.Duration
+	// TLS is the mutual TLS material. Empty only with Insecure.
+	TLS TLS
+	// Insecure serves and dials plaintext, an explicit opt in.
+	Insecure bool
+}
+
+// TLS points at the PEM files for mutual TLS. The same pair serves
+// the api and dials push targets.
+type TLS struct {
+	CAFile   string
+	CertFile string
+	KeyFile  string
+}
+
+// Enabled reports whether TLS material is configured.
+func (t TLS) Enabled() bool {
+	return t.CAFile != "" || t.CertFile != "" || t.KeyFile != ""
 }
 
 // PoolSize is a thin pool bootstrap size: a byte count, or a
@@ -54,6 +71,14 @@ type rawConfig struct {
 	PoolSize            string `koanf:"pool_size"`
 	MaxInboundTransfers int    `koanf:"max_inbound_transfers"`
 	TransferGrace       string `koanf:"transfer_grace"`
+	TLS                 rawTLS `koanf:"tls"`
+	Insecure            bool   `koanf:"insecure"`
+}
+
+type rawTLS struct {
+	CAFile   string `koanf:"ca_file"`
+	CertFile string `koanf:"cert_file"`
+	KeyFile  string `koanf:"key_file"`
 }
 
 var defaults = map[string]any{
@@ -135,6 +160,20 @@ func validate(raw rawConfig) (Config, error) {
 		return Config{}, fmt.Errorf("transfer_grace must be a positive duration: %q", raw.TransferGrace)
 	}
 
+	tls := TLS{CAFile: raw.TLS.CAFile, CertFile: raw.TLS.CertFile, KeyFile: raw.TLS.KeyFile}
+	switch {
+	case tls.Enabled() && raw.Insecure:
+		return Config{}, errors.New("tls and insecure exclude each other")
+
+	case tls.Enabled():
+		if tls.CAFile == "" || tls.CertFile == "" || tls.KeyFile == "" {
+			return Config{}, errors.New("tls needs ca_file, cert_file and key_file")
+		}
+
+	case !raw.Insecure:
+		return Config{}, errors.New("either configure tls or opt in with insecure: true")
+	}
+
 	return Config{
 		ListenAddress:       raw.ListenAddress,
 		LogLevel:            level,
@@ -144,6 +183,8 @@ func validate(raw rawConfig) (Config, error) {
 		PoolSize:            poolSize,
 		MaxInboundTransfers: raw.MaxInboundTransfers,
 		TransferGrace:       grace,
+		TLS:                 tls,
+		Insecure:            raw.Insecure,
 	}, nil
 }
 

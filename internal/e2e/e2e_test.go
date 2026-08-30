@@ -134,7 +134,7 @@ func serve(t *testing.T, client *lvm.Client, cfg config.Config) testDaemon {
 	t.Helper()
 
 	server := grpc.NewServer()
-	api.Register(t.Context(), server, client, cfg)
+	require.NoError(t, api.Register(t.Context(), server, client, cfg))
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)

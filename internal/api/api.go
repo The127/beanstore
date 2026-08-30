@@ -53,13 +53,21 @@ type transferServiceServer struct {
 // Register wires all beanstore services onto the given grpc server.
 // The context must outlive the server, long-running operations run on
 // it.
-func Register(ctx context.Context, server *grpc.Server, client *lvm.Client, cfg config.Config) {
+func Register(ctx context.Context, server *grpc.Server, client *lvm.Client, cfg config.Config) error {
+	dialCreds, err := clientCredentials(cfg)
+	if err != nil {
+		return err
+	}
+
 	ops := operations.NewTable()
 	transfers := storage.NewTransfers(ctx, client, cfg)
 	volumes := &volumeServiceServer{
 		lvm: client, cfg: cfg, ops: ops, pins: storage.NewExportPins(),
 		transfers: transfers, background: ctx,
-		dial: dialTarget, pushRetryDelay: pushRetryDelay, resolveRetryDelay: resolveRetryDelay,
+		dial: func(target string) (*grpc.ClientConn, error) {
+			return grpc.NewClient(target, grpc.WithTransportCredentials(dialCreds))
+		},
+		pushRetryDelay: pushRetryDelay, resolveRetryDelay: resolveRetryDelay,
 		reserved: newNameReservations(),
 	}
 	beanstorev1.RegisterVolumeServiceServer(server, volumes)
@@ -67,6 +75,8 @@ func Register(ctx context.Context, server *grpc.Server, client *lvm.Client, cfg 
 	beanstorev1.RegisterTransferServiceServer(server, &transferServiceServer{transfers: transfers})
 
 	go volumes.resolveRecovered()
+
+	return nil
 }
 
 // volumeIDPattern is the lv name charset, minus a leading dash or dot.

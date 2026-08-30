@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const storageConfig = "volume_group: vg0\nthin_pool: pool0\n"
+const storageConfig = "volume_group: vg0\nthin_pool: pool0\ninsecure: true\n"
 
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
@@ -126,4 +126,42 @@ func TestPoolSizeWithoutCreatePoolFails(t *testing.T) {
 	_, err := Load(path, true)
 
 	assert.ErrorContains(t, err, "pool_size requires create_pool")
+}
+
+const tlsConfig = "volume_group: vg0\nthin_pool: pool0\n" +
+	"tls:\n  ca_file: /pki/ca.pem\n  cert_file: /pki/node.pem\n  key_file: /pki/node.key\n"
+
+func TestTLSConfigLoads(t *testing.T) {
+	path := writeConfig(t, tlsConfig)
+
+	cfg, err := Load(path, true)
+
+	require.NoError(t, err)
+	assert.True(t, cfg.TLS.Enabled())
+	assert.Equal(t, "/pki/ca.pem", cfg.TLS.CAFile)
+	assert.False(t, cfg.Insecure)
+}
+
+func TestNeitherTLSNorInsecureFails(t *testing.T) {
+	path := writeConfig(t, "volume_group: vg0\nthin_pool: pool0\n")
+
+	_, err := Load(path, true)
+
+	assert.ErrorContains(t, err, "either configure tls or opt in")
+}
+
+func TestPartialTLSFails(t *testing.T) {
+	path := writeConfig(t, "volume_group: vg0\nthin_pool: pool0\ntls:\n  ca_file: /pki/ca.pem\n")
+
+	_, err := Load(path, true)
+
+	assert.ErrorContains(t, err, "tls needs ca_file, cert_file and key_file")
+}
+
+func TestTLSAndInsecureExclude(t *testing.T) {
+	path := writeConfig(t, tlsConfig+"insecure: true\n")
+
+	_, err := Load(path, true)
+
+	assert.ErrorContains(t, err, "exclude each other")
 }

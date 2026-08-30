@@ -8,7 +8,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	beanstorev1 "github.com/The127/beanstore/client/gen/beanstore/v1"
@@ -25,10 +24,6 @@ const pushRetryDelay = 2 * time.Second
 // targetAddressPattern is host:port in the lvm tag charset, the
 // address persists as a tag.
 var targetAddressPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+:[0-9]+$`)
-
-func dialTarget(target string) (*grpc.ClientConn, error) {
-	return grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
-}
 
 func (s *volumeServiceServer) PushVolume(ctx context.Context, request *beanstorev1.PushVolumeRequest) (*beanstorev1.PushVolumeResponse, error) {
 	if !volumeIDPattern.MatchString(request.VolumeId) {

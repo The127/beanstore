@@ -87,8 +87,16 @@ func run() error {
 		return fmt.Errorf("listening on %s: %w", cfg.ListenAddress, err)
 	}
 
-	server := grpc.NewServer()
-	api.Register(ctx, server, lvmClient, cfg)
+	creds, err := api.ServerCredentials(cfg)
+	if err != nil {
+		return fmt.Errorf("loading tls credentials: %w", err)
+	}
+
+	server := grpc.NewServer(grpc.Creds(creds))
+	err = api.Register(ctx, server, lvmClient, cfg)
+	if err != nil {
+		return fmt.Errorf("registering services: %w", err)
+	}
 	reflection.Register(server)
 
 	go func() {
