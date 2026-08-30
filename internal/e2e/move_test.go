@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -232,4 +233,88 @@ func TestIntegrationMoveEdges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, list.Volumes, 1)
 	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_RETIRED, list.Volumes[0].State)
+}
+
+func TestIntegrationMoveUnreachableTarget(t *testing.T) {
+	source := daemon(t)
+	ctx := t.Context()
+
+	_, err := source.volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
+		VolumeId:    "vol-1",
+		SizeBytes:   16 << 20,
+		OperationId: "op-create",
+	})
+	require.NoError(t, err)
+	waitDone(t, source.operations, "op-create")
+
+	// reserve a port nobody answers on
+	dead, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	deadAddress := dead.Addr().String()
+	require.NoError(t, dead.Close())
+
+	_, err = source.volumes.PushVolume(ctx, &beanstorev1.PushVolumeRequest{
+		VolumeId:      "vol-1",
+		TransferId:    "tr-nowhere",
+		TargetAddress: deadAddress,
+		OperationId:   "op-push-nowhere",
+	})
+	require.NoError(t, err)
+	waitFailed(t, source.operations, "op-push-nowhere")
+
+	list, err := source.volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	require.Len(t, list.Volumes, 1)
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_READY, list.Volumes[0].State,
+		"the exhausted push reverted")
+}
+
+func TestIntegrationMoveCrashResolution(t *testing.T) {
+	target := daemon(t)
+	ctx := t.Context()
+
+	// the copy whose commit landed before the source "crashed"
+	_, err := target.volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
+		VolumeId:    "vol-moved",
+		SizeBytes:   16 << 20,
+		OperationId: "op-create",
+	})
+	require.NoError(t, err)
+	waitDone(t, target.operations, "op-create")
+
+	sourceClient, sourceCfg := provision(t)
+	seed := func(name string, state storage.State, transfer string) {
+		require.NoError(t, sourceClient.CreateThinVolume(ctx, sourceCfg.VolumeGroup, sourceCfg.ThinPool,
+			name, 16<<20, lvm.CreateThinVolumeOptions{
+				AddTags: []string{
+					storage.StateTag(state),
+					"beanstore.transfer=" + transfer,
+					"beanstore.target=" + target.address,
+				},
+				Activate: lvm.Bool(false),
+			}))
+	}
+	seed("vol-moved", storage.StateCommitting, "tr-1")
+	seed("vol-lost", storage.StateCommitting, "tr-2")
+	seed("vol-mid", storage.StatePushing, "tr-3")
+
+	// the daemon boot sequence: recover, then serve with the resolver
+	require.NoError(t, storage.Recover(ctx, sourceClient, sourceCfg))
+	source := serve(t, sourceClient, sourceCfg)
+
+	require.Eventually(t, func() bool {
+		list, err := source.volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+		if err != nil {
+			return false
+		}
+		states := map[string]beanstorev1.VolumeState{}
+		for _, volume := range list.Volumes {
+			states[volume.VolumeId] = volume.State
+		}
+
+		return states["vol-moved"] == beanstorev1.VolumeState_VOLUME_STATE_RETIRED &&
+			states["vol-lost"] == beanstorev1.VolumeState_VOLUME_STATE_READY &&
+			states["vol-mid"] == beanstorev1.VolumeState_VOLUME_STATE_READY
+	}, 30*time.Second, 200*time.Millisecond,
+		"landed commit retires, lost commit and interrupted stream revert")
 }

@@ -92,9 +92,9 @@ type testDaemon struct {
 // daemonSeq keeps vg names unique when one test runs two daemons.
 var daemonSeq atomic.Int64
 
-// daemon brings up the full stack on a real vg: storage setup with
-// pool bootstrap, api, grpc over localhost.
-func daemon(t *testing.T) testDaemon {
+// provision brings up a fresh vg on a loop device and bootstraps the
+// pool.
+func provision(t *testing.T) (*lvm.Client, config.Config) {
 	t.Helper()
 
 	loop := loopDevice(t)
@@ -119,8 +119,15 @@ func daemon(t *testing.T) testDaemon {
 	}
 	require.NoError(t, storage.Setup(ctx, client, cfg))
 
+	return client, cfg
+}
+
+// serve starts the grpc stack on a provisioned vg.
+func serve(t *testing.T, client *lvm.Client, cfg config.Config) testDaemon {
+	t.Helper()
+
 	server := grpc.NewServer()
-	api.Register(ctx, server, client, cfg)
+	api.Register(t.Context(), server, client, cfg)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -139,10 +146,20 @@ func daemon(t *testing.T) testDaemon {
 		volumes:    beanstorev1.NewVolumeServiceClient(conn),
 		operations: beanstorev1.NewOperationServiceClient(conn),
 		transfers:  beanstorev1.NewTransferServiceClient(conn),
-		vg:         vg,
+		vg:         cfg.VolumeGroup,
 		lvm:        client,
 		address:    listener.Addr().String(),
 	}
+}
+
+// daemon brings up the full stack on a real vg: storage setup with
+// pool bootstrap, api, grpc over localhost.
+func daemon(t *testing.T) testDaemon {
+	t.Helper()
+
+	client, cfg := provision(t)
+
+	return serve(t, client, cfg)
 }
 
 func waitDone(t *testing.T, operations beanstorev1.OperationServiceClient, id string) {
