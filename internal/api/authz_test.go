@@ -15,15 +15,16 @@ import (
 	beanstorev1 "github.com/The127/beanstore/client/gen/beanstore/v1"
 	"github.com/The127/beanstore/internal/config"
 	"github.com/The127/beanstore/internal/storage"
+	"github.com/The127/beanstore/internal/testpki"
 )
 
 func TestRoleAuthorization(t *testing.T) {
-	pki := newTestPKI(t)
+	pki := testpki.New(t)
 	fake := &fakeRunner{outputs: []string{noLVs}}
 	volumes, _ := testServer(t, fake)
 
 	options, err := ServerOptions(config.Config{
-		VolumeGroup: "vg0", ThinPool: "pool0", TLS: pki.leaf(t, "server"),
+		VolumeGroup: "vg0", ThinPool: "pool0", TLS: pki.Leaf(t, "server"),
 	})
 	require.NoError(t, err)
 
@@ -51,12 +52,12 @@ func TestRoleAuthorization(t *testing.T) {
 		return conn
 	}
 
-	orchestrator := dial(pki.leaf(t, "orchestrator", RoleOrchestrator))
+	orchestrator := dial(pki.Leaf(t, "orchestrator", RoleOrchestrator))
 	_, err = beanstorev1.NewVolumeServiceClient(orchestrator).ListVolumes(t.Context(),
 		&beanstorev1.ListVolumesRequest{})
 	require.NoError(t, err, "the orchestrator calls the control plane")
 
-	node := dial(pki.leaf(t, "node-2", RoleNode))
+	node := dial(pki.Leaf(t, "node-2", RoleNode))
 	_, err = beanstorev1.NewVolumeServiceClient(node).ListVolumes(t.Context(),
 		&beanstorev1.ListVolumesRequest{})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err), "nodes cannot touch the control plane")
@@ -71,7 +72,7 @@ func TestRoleAuthorization(t *testing.T) {
 	_, err = stream.Recv()
 	assert.Equal(t, codes.PermissionDenied, status.Code(err), "streams are intercepted too")
 
-	stranger := dial(pki.leaf(t, "stranger"))
+	stranger := dial(pki.Leaf(t, "stranger"))
 	_, err = beanstorev1.NewTransferServiceClient(stranger).QueryTransfer(t.Context(),
 		&beanstorev1.QueryTransferRequest{TransferId: "tr-1"})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err), "a roleless certificate calls nothing")

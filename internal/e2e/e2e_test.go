@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
@@ -129,11 +130,22 @@ func provision(t *testing.T) (*lvm.Client, config.Config) {
 	return client, cfg
 }
 
-// serve starts the grpc stack on a provisioned vg.
+// serve starts the grpc stack on a provisioned vg with plaintext
+// clients.
 func serve(t *testing.T, client *lvm.Client, cfg config.Config) testDaemon {
 	t.Helper()
 
-	server := grpc.NewServer()
+	return serveAs(t, client, cfg, insecure.NewCredentials())
+}
+
+// serveAs starts the grpc stack honoring cfg.TLS, the returned
+// clients dial with the given credentials.
+func serveAs(t *testing.T, client *lvm.Client, cfg config.Config, creds credentials.TransportCredentials) testDaemon {
+	t.Helper()
+
+	options, err := api.ServerOptions(cfg)
+	require.NoError(t, err)
+	server := grpc.NewServer(options...)
 	require.NoError(t, api.Register(t.Context(), server, client, cfg))
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -143,7 +155,7 @@ func serve(t *testing.T, client *lvm.Client, cfg config.Config) testDaemon {
 	}()
 	t.Cleanup(server.Stop)
 
-	conn, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(creds))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = conn.Close()
