@@ -30,7 +30,7 @@ jobs:
         run: go test -tags integration -run TestIntegration -coverprofile=coverage-integration.out -covermode=atomic -coverpkg=./internal/... -v ./internal/e2e/
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-integration.out,./lvm/coverage-integration.out
@@ -120,7 +120,7 @@ jobs:
           go test -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.out,./client/coverage.out,./lvm/coverage.out
