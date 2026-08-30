@@ -7,7 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/The127/beanstore/client"
@@ -195,4 +197,118 @@ func TestIntegrationSnapshotEdges(t *testing.T) {
 	assert.Equal(t, uint64(16<<20), trailer.SizeBytes)
 	assert.Equal(t, expectedDigest(make([]byte, 16<<20)), trailer.Digest,
 		"the never written origin snapshots as zeros")
+}
+
+func TestIntegrationSnapshotExportRace(t *testing.T) {
+	node := daemon(t)
+	ctx := t.Context()
+
+	_, err := node.volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
+		VolumeId:    "vol-1",
+		SizeBytes:   16 << 20,
+		OperationId: "op-create",
+	})
+	require.NoError(t, err)
+	waitDone(t, node.operations, "op-create")
+
+	attach, err := node.volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "vol-1"})
+	require.NoError(t, err)
+	pattern := patternFile(t, 8<<20, 251)
+	require.NoError(t, sudoRun(ctx, "dd", "if="+pattern.path, "of="+attach.DevicePath, "bs=1M", "conv=fsync"))
+
+	_, err = node.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-1",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, node.lvm.ActivateLogicalVolume(ctx, lvm.Name(node.vg+"/snap-1"),
+		lvm.ActivateLogicalVolumeOptions{IgnoreActivationSkip: true}))
+	require.NoError(t, sudoRun(ctx, "chmod", "o+r", "/dev/"+node.vg+"/snap-1"))
+
+	// fixed small windows keep the server blocked mid-stream, so the
+	// export provably stays live while the deletes fire
+	slow, err := grpc.NewClient(node.address,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithInitialWindowSize(64<<10),
+		grpc.WithInitialConnWindowSize(64<<10))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = slow.Close() })
+
+	stream, err := beanstorev1.NewVolumeServiceClient(slow).Export(ctx,
+		&beanstorev1.ExportRequest{SnapshotId: "snap-1"})
+	require.NoError(t, err)
+	first, err := stream.Recv()
+	require.NoError(t, err)
+	require.NotNil(t, first.GetFrame(), "the pattern produces frames")
+
+	_, err = node.volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
+	assert.Equal(t, codes.Aborted, status.Code(err), "the live export blocks the delete")
+
+	_, err = node.volumes.DeleteVolume(ctx, &beanstorev1.DeleteVolumeRequest{
+		VolumeId:    "vol-1",
+		OperationId: "op-delete-pinned",
+		Force:       true,
+	})
+	assert.Equal(t, codes.Aborted, status.Code(err), "the live export blocks the cascade")
+
+	// a second full export runs concurrently and releases its own pin
+	_, concurrentTrailer := export(t, node, "snap-1")
+
+	expected := make([]byte, 16<<20)
+	copy(expected, pattern.bytes)
+	assert.Equal(t, expectedDigest(expected), concurrentTrailer.Digest)
+
+	_, err = node.volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
+	assert.Equal(t, codes.Aborted, status.Code(err), "the first export still holds its pin")
+
+	// drain the slow export, its content matches despite the deletes
+	var slowTrailer *beanstorev1.ExportTrailer
+	for slowTrailer == nil {
+		response, err := stream.Recv()
+		require.NoError(t, err)
+		slowTrailer = response.GetTrailer()
+	}
+	assert.Equal(t, expectedDigest(expected), slowTrailer.Digest)
+
+	_, err = node.volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
+	require.NoError(t, err, "the last pin released the snapshot")
+
+	_, err = node.volumes.Detach(ctx, &beanstorev1.DetachRequest{VolumeId: "vol-1"})
+	require.NoError(t, err)
+	_, err = node.volumes.DeleteVolume(ctx, &beanstorev1.DeleteVolumeRequest{
+		VolumeId:    "vol-1",
+		OperationId: "op-delete",
+	})
+	require.NoError(t, err)
+	waitDone(t, node.operations, "op-delete")
+}
+
+func TestIntegrationSnapshotRecovery(t *testing.T) {
+	lvmClient, cfg := provision(t)
+	ctx := t.Context()
+
+	require.NoError(t, lvmClient.CreateThinVolume(ctx, cfg.VolumeGroup, cfg.ThinPool,
+		"vol-1", 16<<20, lvm.CreateThinVolumeOptions{
+			AddTags:  []string{storage.StateTag(storage.StateReady)},
+			Activate: lvm.Bool(false),
+		}))
+	require.NoError(t, storage.CreateSnapshot(ctx, lvmClient, cfg, "vol-1", "snap-1"))
+
+	// a crash mid-export leaves the snapshot active
+	require.NoError(t, lvmClient.ActivateLogicalVolume(ctx, lvm.Name(cfg.VolumeGroup+"/snap-1"),
+		lvm.ActivateLogicalVolumeOptions{IgnoreActivationSkip: true}))
+
+	require.NoError(t, storage.Recover(ctx, lvmClient, cfg))
+
+	volumes, err := storage.ListVolumes(ctx, lvmClient, cfg)
+	require.NoError(t, err)
+	states := map[string]storage.Volume{}
+	for _, volume := range volumes {
+		states[volume.ID] = volume
+	}
+	require.Contains(t, states, "snap-1")
+	assert.False(t, states["snap-1"].Active, "recovery deactivated the stray snapshot")
+	assert.Equal(t, storage.StateSnapshot, states["snap-1"].State, "the snapshot itself survives")
+	assert.Equal(t, storage.StateReady, states["vol-1"].State)
 }
