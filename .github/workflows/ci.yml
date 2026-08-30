@@ -71,6 +71,9 @@ jobs:
           breaking: false
           push: false
           archive: false
+          # needs write permissions the token does not have on
+          # dependabot prs
+          pr_comment: false
 
       - name: proto generation check
         run: |
