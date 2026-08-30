@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/The127/beanstore/internal/config"
 	"github.com/The127/beanstore/internal/logging"
@@ -22,6 +23,11 @@ func Recover(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 	}
 
 	log := logging.FromContext(ctx)
+	byName := map[string]bool{}
+	for _, volume := range volumes {
+		byName[volume.ID] = true
+	}
+
 	for _, volume := range volumes {
 		switch volume.State {
 		case StateCreating, StateDeleting:
@@ -98,6 +104,16 @@ func Recover(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 			log.Info("committing volume awaits push resolution",
 				"volume", volume.ID, "target", volume.PushTarget)
 
+		case StateRollback:
+			err = recoverRollback(ctx, client, cfg, volume, byName)
+			if err != nil {
+				log.Error("settling rollback copy during recovery",
+					"volume", volume.ID, "target", volume.RollbackTarget, "error", err)
+				continue
+			}
+			log.Info("settled rollback copy during recovery",
+				"volume", volume.ID, "target", volume.RollbackTarget)
+
 		case StateReady, StateRetired:
 
 		case StateUnknown:
@@ -107,4 +123,25 @@ func Recover(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 	}
 
 	return nil
+}
+
+// recoverRollback settles one rollback copy. Rule order matters: a
+// copy already renamed onto its target only needs the retag, a copy
+// whose target still exists aborts, otherwise the rollback finishes.
+func recoverRollback(ctx context.Context, client *lvm.Client, cfg config.Config, volume Volume, byName map[string]bool) error {
+	target := volume.RollbackTarget
+	if target == "" {
+		return fmt.Errorf("rollback copy %s misses its target tag, resolve manually", volume.ID)
+	}
+
+	switch {
+	case volume.ID == target:
+		return FinishRollback(ctx, client, cfg, volume.ID, target)
+
+	case byName[target]:
+		return RemoveVolume(ctx, client, cfg, volume.ID)
+
+	default:
+		return FinishRollback(ctx, client, cfg, volume.ID, target)
+	}
 }

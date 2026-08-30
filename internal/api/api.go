@@ -36,6 +36,8 @@ type volumeServiceServer struct {
 	// resolveRetryDelay spaces the resolution attempts of recovered
 	// COMMITTING volumes.
 	resolveRetryDelay time.Duration
+	// reserved holds names an in-flight rollback claims.
+	reserved *nameReservations
 }
 
 type operationServiceServer struct {
@@ -58,6 +60,7 @@ func Register(ctx context.Context, server *grpc.Server, client *lvm.Client, cfg 
 		lvm: client, cfg: cfg, ops: ops, pins: storage.NewExportPins(),
 		transfers: transfers, background: ctx,
 		dial: dialTarget, pushRetryDelay: pushRetryDelay, resolveRetryDelay: resolveRetryDelay,
+		reserved: newNameReservations(),
 	}
 	beanstorev1.RegisterVolumeServiceServer(server, volumes)
 	beanstorev1.RegisterOperationServiceServer(server, &operationServiceServer{ops: ops})
@@ -85,7 +88,7 @@ func (s *volumeServiceServer) CreateVolume(ctx context.Context, request *beansto
 		logging.FromContext(ctx).Error("looking up volume", "volume", request.VolumeId, "error", err)
 		return nil, status.Error(codes.Internal, "volume lookup failed")
 	}
-	if exists {
+	if exists || s.reserved.Reserved(request.VolumeId) {
 		return nil, status.Error(codes.AlreadyExists, "volume already exists")
 	}
 
@@ -358,6 +361,10 @@ func (s *volumeServiceServer) PrepareReceive(ctx context.Context, request *beans
 		return nil, status.Error(codes.InvalidArgument, "size_bytes must be set")
 	}
 
+	if s.reserved.Reserved(request.VolumeId) {
+		return nil, status.Error(codes.AlreadyExists, "volume already exists")
+	}
+
 	existing, err := storage.GetVolume(ctx, s.lvm, s.cfg, request.VolumeId)
 	switch {
 	case err == nil:
@@ -491,8 +498,17 @@ func volumeError(ctx context.Context, err error, message string) error {
 
 		return detailed.Err()
 
+	case errors.Is(err, storage.ErrWrongLineage):
+		return status.Error(codes.FailedPrecondition, err.Error())
+
 	case errors.Is(err, lvm.ErrInUse):
 		return status.Error(codes.FailedPrecondition, "volume is in use")
+
+	case errors.Is(err, lvm.ErrNotFound):
+		return status.Error(codes.NotFound, "volume does not exist")
+
+	case errors.Is(err, lvm.ErrAlreadyExists):
+		return status.Error(codes.AlreadyExists, err.Error())
 
 	default:
 		logging.FromContext(ctx).Error(message, "error", err)
@@ -575,6 +591,9 @@ func protoState(state storage.State) beanstorev1.VolumeState {
 
 	case storage.StateSnapshot:
 		return beanstorev1.VolumeState_VOLUME_STATE_SNAPSHOT
+
+	case storage.StateRollback:
+		return beanstorev1.VolumeState_VOLUME_STATE_ROLLBACK
 
 	default:
 		return beanstorev1.VolumeState_VOLUME_STATE_UNSPECIFIED

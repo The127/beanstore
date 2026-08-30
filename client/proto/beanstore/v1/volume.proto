@@ -70,6 +70,12 @@ service VolumeService {
   // deletion. The snapshot refuses deletion while the copy runs.
   // Progress is polled on the operation.
   rpc CreateVolumeFromSnapshot(CreateVolumeFromSnapshotRequest) returns (CreateVolumeFromSnapshotResponse);
+
+  // RollbackVolume replaces a READY volume's content with one of its
+  // own snapshots, keeping the volume id. Cheap, no data is copied.
+  // The snapshot and the volume's other snapshots survive, rolling
+  // back again is allowed.
+  rpc RollbackVolume(RollbackVolumeRequest) returns (RollbackVolumeResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -93,6 +99,9 @@ enum VolumeState {
   // COMMITTING is a pushed volume whose commit outcome is unknown.
   // The source resolves it against the target after a restart.
   VOLUME_STATE_COMMITTING = 9;
+  // ROLLBACK is the transient copy of an in-flight rollback. Recovery
+  // settles it after a crash.
+  VOLUME_STATE_ROLLBACK = 10;
 }
 
 message Volume {
@@ -203,6 +212,13 @@ message CreateVolumeFromSnapshotRequest {
 }
 
 message CreateVolumeFromSnapshotResponse {}
+
+message RollbackVolumeRequest {
+  string volume_id = 1;
+  string source_snapshot_id = 2;
+}
+
+message RollbackVolumeResponse {}
 
 message GetNodeStatusRequest {}
 

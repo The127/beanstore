@@ -25,6 +25,7 @@ const (
 	StateRetired    State = "retired"
 	StateDeleting   State = "deleting"
 	StateSnapshot   State = "snapshot"
+	StateRollback   State = "rollback"
 	StateUnknown    State = ""
 )
 
@@ -61,6 +62,9 @@ type Volume struct {
 	// PushTarget is the destination address of a PUSHING or
 	// COMMITTING volume, empty otherwise.
 	PushTarget string
+	// RollbackTarget is the volume a ROLLBACK copy replaces, empty
+	// otherwise.
+	RollbackTarget string
 }
 
 // ErrNotFound reports that no beanstore volume with the given id
@@ -178,16 +182,17 @@ func volumeFromLV(lv lvm.LogicalVolume) Volume {
 	}
 
 	return Volume{
-		ID:           lv.Name,
-		State:        state,
-		SizeBytes:    lv.SizeBytes,
-		UsedBytes:    uint64(float64(lv.SizeBytes) * lv.DataPercent / 100),
-		Path:         lv.Path,
-		Origin:       origin,
-		OriginTagged: tagged,
-		Active:       lv.Active,
-		Transfer:     tagValue(lv.Tags, transferTagPrefix),
-		PushTarget:   tagValue(lv.Tags, targetTagPrefix),
+		ID:             lv.Name,
+		State:          state,
+		SizeBytes:      lv.SizeBytes,
+		UsedBytes:      uint64(float64(lv.SizeBytes) * lv.DataPercent / 100),
+		Path:           lv.Path,
+		Origin:         origin,
+		OriginTagged:   tagged,
+		Active:         lv.Active,
+		Transfer:       tagValue(lv.Tags, transferTagPrefix),
+		PushTarget:     tagValue(lv.Tags, targetTagPrefix),
+		RollbackTarget: tagValue(lv.Tags, rollbackTargetTagPrefix),
 	}
 }
 
@@ -478,6 +483,7 @@ var knownStates = map[State]bool{
 	StateRetired:    true,
 	StateDeleting:   true,
 	StateSnapshot:   true,
+	StateRollback:   true,
 }
 
 func knownState(value string) State {

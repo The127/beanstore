@@ -71,6 +71,7 @@ func testServer(t *testing.T, fake *fakeRunner) (*volumeServiceServer, *operatio
 		ops:        ops,
 		pins:       storage.NewExportPins(),
 		background: t.Context(),
+		reserved:   newNameReservations(),
 	}
 
 	return volumes, &operationServiceServer{ops: ops}

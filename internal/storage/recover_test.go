@@ -71,6 +71,50 @@ const pushingSingle = `{"report": [{"lv": [
 	 "lv_active": "active", "lv_layout": "thin,sparse"}
 ]}], "log": []}`
 
+// rollbackScan renders one rollback copy named name targeting vol-1,
+// optionally next to a surviving vol-1.
+func rollbackScan(name string, withTarget bool) string {
+	rows := `{"lv_name": "` + name + `", "lv_uuid": "u1", "vg_name": "vg0",
+	 "lv_size": "1048576", "lv_attr": "Vwi---tz--",
+	 "lv_tags": "beanstore.state=rollback,beanstore.rollback_target=vol-1",
+	 "pool_lv": "pool0", "origin": "snap-1", "lv_path": "", "lv_dm_path": "",
+	 "data_percent": "", "metadata_percent": "", "lv_active": "",
+	 "lv_layout": "thin,sparse"}`
+	if withTarget {
+		rows += `,
+	{"lv_name": "vol-1", "lv_uuid": "u2", "vg_name": "vg0",
+	 "lv_size": "1048576", "lv_attr": "Vwi---tz--",
+	 "lv_tags": "beanstore.state=ready", "pool_lv": "pool0", "origin": "",
+	 "lv_path": "", "lv_dm_path": "", "data_percent": "",
+	 "metadata_percent": "", "lv_active": "", "lv_layout": "thin,sparse"}`
+	}
+
+	return `{"report": [{"lv": [` + rows + `]}], "log": []}`
+}
+
+func TestRecoverSettlesRollbackCopies(t *testing.T) {
+	// rule 1: already renamed, retag only
+	fake := &fakeRunner{outputs: []string{rollbackScan("vol-1", false), ""}}
+	require.NoError(t, Recover(t.Context(), lvm.New(lvm.WithRunner(fake)), testConfig()))
+	require.Len(t, fake.calls, 2)
+	retagged := strings.Join(fake.calls[1].Args(), " ")
+	assert.Contains(t, retagged, "--addtag beanstore.state=ready")
+	assert.NotContains(t, strings.Join(fake.commands(), " "), "lvrename")
+
+	// rule 2: the target survived, the rollback aborts
+	fake = &fakeRunner{outputs: []string{rollbackScan("vol-1+rb", true), ""}}
+	require.NoError(t, Recover(t.Context(), lvm.New(lvm.WithRunner(fake)), testConfig()))
+	assert.Contains(t, fake.commands(), "lvremove -f vg0/vol-1+rb")
+
+	// rule 3: the target is gone, the rollback finishes
+	fake = &fakeRunner{outputs: []string{rollbackScan("vol-1+rb", false), "", ""}}
+	require.NoError(t, Recover(t.Context(), lvm.New(lvm.WithRunner(fake)), testConfig()))
+	commands := fake.commands()
+	require.Len(t, commands, 3)
+	assert.Equal(t, "lvrename vg0 vol-1+rb vol-1", commands[1])
+	assert.Contains(t, commands[2], "--addtag beanstore.state=ready")
+}
+
 func TestRecoverBackfillsSnapshotLineage(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{lineageLVs, ""}}
 	client := lvm.New(lvm.WithRunner(fake))

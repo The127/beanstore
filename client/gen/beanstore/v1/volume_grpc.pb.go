@@ -33,6 +33,7 @@ const (
 	VolumeService_PushVolume_FullMethodName               = "/beanstore.v1.VolumeService/PushVolume"
 	VolumeService_PushSnapshot_FullMethodName             = "/beanstore.v1.VolumeService/PushSnapshot"
 	VolumeService_CreateVolumeFromSnapshot_FullMethodName = "/beanstore.v1.VolumeService/CreateVolumeFromSnapshot"
+	VolumeService_RollbackVolume_FullMethodName           = "/beanstore.v1.VolumeService/RollbackVolume"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -90,6 +91,11 @@ type VolumeServiceClient interface {
 	// deletion. The snapshot refuses deletion while the copy runs.
 	// Progress is polled on the operation.
 	CreateVolumeFromSnapshot(ctx context.Context, in *CreateVolumeFromSnapshotRequest, opts ...grpc.CallOption) (*CreateVolumeFromSnapshotResponse, error)
+	// RollbackVolume replaces a READY volume's content with one of its
+	// own snapshots, keeping the volume id. Cheap, no data is copied.
+	// The snapshot and the volume's other snapshots survive, rolling
+	// back again is allowed.
+	RollbackVolume(ctx context.Context, in *RollbackVolumeRequest, opts ...grpc.CallOption) (*RollbackVolumeResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -249,6 +255,16 @@ func (c *volumeServiceClient) CreateVolumeFromSnapshot(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *volumeServiceClient) RollbackVolume(ctx context.Context, in *RollbackVolumeRequest, opts ...grpc.CallOption) (*RollbackVolumeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RollbackVolumeResponse)
+	err := c.cc.Invoke(ctx, VolumeService_RollbackVolume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -304,6 +320,11 @@ type VolumeServiceServer interface {
 	// deletion. The snapshot refuses deletion while the copy runs.
 	// Progress is polled on the operation.
 	CreateVolumeFromSnapshot(context.Context, *CreateVolumeFromSnapshotRequest) (*CreateVolumeFromSnapshotResponse, error)
+	// RollbackVolume replaces a READY volume's content with one of its
+	// own snapshots, keeping the volume id. Cheap, no data is copied.
+	// The snapshot and the volume's other snapshots survive, rolling
+	// back again is allowed.
+	RollbackVolume(context.Context, *RollbackVolumeRequest) (*RollbackVolumeResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -355,6 +376,9 @@ func (UnimplementedVolumeServiceServer) PushSnapshot(context.Context, *PushSnaps
 }
 func (UnimplementedVolumeServiceServer) CreateVolumeFromSnapshot(context.Context, *CreateVolumeFromSnapshotRequest) (*CreateVolumeFromSnapshotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateVolumeFromSnapshot not implemented")
+}
+func (UnimplementedVolumeServiceServer) RollbackVolume(context.Context, *RollbackVolumeRequest) (*RollbackVolumeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RollbackVolume not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -622,6 +646,24 @@ func _VolumeService_CreateVolumeFromSnapshot_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_RollbackVolume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RollbackVolumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).RollbackVolume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_RollbackVolume_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).RollbackVolume(ctx, req.(*RollbackVolumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -680,6 +722,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateVolumeFromSnapshot",
 			Handler:    _VolumeService_CreateVolumeFromSnapshot_Handler,
+		},
+		{
+			MethodName: "RollbackVolume",
+			Handler:    _VolumeService_RollbackVolume_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
