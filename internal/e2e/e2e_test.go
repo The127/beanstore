@@ -62,6 +62,13 @@ func loopDevice(t *testing.T) lvm.Device {
 		t.Skip("passwordless sudo unavailable, skipping daemon integration test")
 	}
 
+	// the unprivileged daemon opens devices the moment it creates
+	// them, no chmod can slip in between, so the test vgs' nodes are
+	// born world accessible
+	rule := `SUBSYSTEM=="block", ENV{DM_VG_NAME}=="beanstore-e2e-*", MODE="0666"`
+	require.NoError(t, sudoRun(ctx, "sh", "-c",
+		"printf '%s\\n' '"+rule+"' > /etc/udev/rules.d/99-beanstore-e2e.rules && udevadm control --reload"))
+
 	backing := filepath.Join(t.TempDir(), "backing.img")
 	require.NoError(t, os.WriteFile(backing, nil, 0o600))
 	require.NoError(t, os.Truncate(backing, 1<<30))
