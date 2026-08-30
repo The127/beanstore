@@ -31,6 +31,7 @@ const (
 	VolumeService_Export_FullMethodName         = "/beanstore.v1.VolumeService/Export"
 	VolumeService_PrepareReceive_FullMethodName = "/beanstore.v1.VolumeService/PrepareReceive"
 	VolumeService_PushVolume_FullMethodName     = "/beanstore.v1.VolumeService/PushVolume"
+	VolumeService_PushSnapshot_FullMethodName   = "/beanstore.v1.VolumeService/PushSnapshot"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -76,6 +77,12 @@ type VolumeServiceClient interface {
 	// target node and retires it once the commit lands. Progress is
 	// reported on the operation.
 	PushVolume(ctx context.Context, in *PushVolumeRequest, opts ...grpc.CallOption) (*PushVolumeResponse, error)
+	// PushSnapshot streams a SNAPSHOT into a transfer prepared on the
+	// target node, where it becomes a full standalone volume. A copy,
+	// the snapshot stays untouched and stays deletable only after the
+	// push ends. An unknown commit outcome fails the operation, a
+	// retry is a new transfer id.
+	PushSnapshot(ctx context.Context, in *PushSnapshotRequest, opts ...grpc.CallOption) (*PushSnapshotResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -215,6 +222,16 @@ func (c *volumeServiceClient) PushVolume(ctx context.Context, in *PushVolumeRequ
 	return out, nil
 }
 
+func (c *volumeServiceClient) PushSnapshot(ctx context.Context, in *PushSnapshotRequest, opts ...grpc.CallOption) (*PushSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PushSnapshotResponse)
+	err := c.cc.Invoke(ctx, VolumeService_PushSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -258,6 +275,12 @@ type VolumeServiceServer interface {
 	// target node and retires it once the commit lands. Progress is
 	// reported on the operation.
 	PushVolume(context.Context, *PushVolumeRequest) (*PushVolumeResponse, error)
+	// PushSnapshot streams a SNAPSHOT into a transfer prepared on the
+	// target node, where it becomes a full standalone volume. A copy,
+	// the snapshot stays untouched and stays deletable only after the
+	// push ends. An unknown commit outcome fails the operation, a
+	// retry is a new transfer id.
+	PushSnapshot(context.Context, *PushSnapshotRequest) (*PushSnapshotResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -303,6 +326,9 @@ func (UnimplementedVolumeServiceServer) PrepareReceive(context.Context, *Prepare
 }
 func (UnimplementedVolumeServiceServer) PushVolume(context.Context, *PushVolumeRequest) (*PushVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushVolume not implemented")
+}
+func (UnimplementedVolumeServiceServer) PushSnapshot(context.Context, *PushSnapshotRequest) (*PushSnapshotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PushSnapshot not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -534,6 +560,24 @@ func _VolumeService_PushVolume_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_PushSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PushSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).PushSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_PushSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).PushSnapshot(ctx, req.(*PushSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -584,6 +628,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PushVolume",
 			Handler:    _VolumeService_PushVolume_Handler,
+		},
+		{
+			MethodName: "PushSnapshot",
+			Handler:    _VolumeService_PushSnapshot_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

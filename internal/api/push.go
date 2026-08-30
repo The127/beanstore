@@ -69,7 +69,7 @@ func (s *volumeServiceServer) runPush(id, transferID, target, operationID string
 	defer func() { _ = conn.Close() }()
 	transfers := beanstorev1.NewTransferServiceClient(conn)
 
-	digest, err := s.streamVolume(transfers, id, transferID, operationID)
+	digest, err := s.streamVolume(transfers, id, transferID, operationID, false)
 	if err != nil {
 		s.abortTransfer(transfers, transferID)
 		s.failPush(id, operationID, err)
@@ -89,10 +89,13 @@ func (s *volumeServiceServer) runPush(id, transferID, target, operationID string
 }
 
 // streamVolume activates the volume and streams its frames, resuming
-// at the queried offset after a dropped stream.
-func (s *volumeServiceServer) streamVolume(transfers beanstorev1.TransferServiceClient, id, transferID, operationID string) ([]byte, error) {
+// at the queried offset after a dropped stream. Snapshots activate
+// with ignoreSkip.
+func (s *volumeServiceServer) streamVolume(transfers beanstorev1.TransferServiceClient, id, transferID, operationID string, ignoreSkip bool) ([]byte, error) {
 	err := s.lvm.ActivateLogicalVolume(s.background,
-		lvm.Name(s.cfg.VolumeGroup+"/"+id), lvm.ActivateLogicalVolumeOptions{})
+		lvm.Name(s.cfg.VolumeGroup+"/"+id), lvm.ActivateLogicalVolumeOptions{
+			IgnoreActivationSkip: ignoreSkip,
+		})
 	if err != nil {
 		return nil, fmt.Errorf("activating volume %s: %w", id, err)
 	}
@@ -187,12 +190,16 @@ func (s *volumeServiceServer) streamOnce(transfers beanstorev1.TransferServiceCl
 	return digest, nil
 }
 
-// finishPush drives a COMMITTING volume to its outcome. The commit is
-// idempotent and retried, a dead transfer or exhausted retries fall
-// back to resolving by the volume's state on the target.
-func (s *volumeServiceServer) finishPush(conn *grpc.ClientConn, id, transferID, operationID string, digest []byte) {
-	transfers := beanstorev1.NewTransferServiceClient(conn)
+type commitOutcome int
 
+const (
+	commitLanded commitOutcome = iota
+	commitRefused
+	commitUnknown
+)
+
+// commitPush retries the idempotent commit until an answer.
+func (s *volumeServiceServer) commitPush(transfers beanstorev1.TransferServiceClient, transferID string, digest []byte) (commitOutcome, error) {
 	var lastErr error
 	for attempt := range pushAttempts {
 		if attempt > 0 {
@@ -202,14 +209,10 @@ func (s *volumeServiceServer) finishPush(conn *grpc.ClientConn, id, transferID, 
 		_, err := transfers.CommitTransfer(s.background,
 			&beanstorev1.CommitTransferRequest{TransferId: transferID, Digest: digest})
 		if err == nil {
-			s.retirePushed(id, operationID)
-
-			return
+			return commitLanded, nil
 		}
 		if status.Code(err) == codes.DataLoss {
-			s.failPush(id, operationID, err)
-
-			return
+			return commitRefused, err
 		}
 		lastErr = err
 		if status.Code(err) == codes.NotFound {
@@ -217,7 +220,24 @@ func (s *volumeServiceServer) finishPush(conn *grpc.ClientConn, id, transferID, 
 		}
 	}
 
-	s.resolvePush(conn, id, transferID, operationID, lastErr)
+	return commitUnknown, lastErr
+}
+
+// finishPush drives a COMMITTING volume to its outcome. A dead
+// transfer or exhausted retries fall back to resolving by the
+// volume's state on the target.
+func (s *volumeServiceServer) finishPush(conn *grpc.ClientConn, id, transferID, operationID string, digest []byte) {
+	outcome, err := s.commitPush(beanstorev1.NewTransferServiceClient(conn), transferID, digest)
+	switch outcome {
+	case commitLanded:
+		s.retirePushed(id, operationID)
+
+	case commitRefused:
+		s.failPush(id, operationID, err)
+
+	case commitUnknown:
+		s.resolvePush(conn, id, transferID, operationID, err)
+	}
 }
 
 // resolvePush settles a COMMITTING volume by the volume's state on

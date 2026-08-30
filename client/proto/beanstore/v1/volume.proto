@@ -56,6 +56,13 @@ service VolumeService {
   // target node and retires it once the commit lands. Progress is
   // reported on the operation.
   rpc PushVolume(PushVolumeRequest) returns (PushVolumeResponse);
+
+  // PushSnapshot streams a SNAPSHOT into a transfer prepared on the
+  // target node, where it becomes a full standalone volume. A copy,
+  // the snapshot stays untouched and stays deletable only after the
+  // push ends. An unknown commit outcome fails the operation, a
+  // retry is a new transfer id.
+  rpc PushSnapshot(PushSnapshotRequest) returns (PushSnapshotResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -170,6 +177,16 @@ message PushVolumeRequest {
 }
 
 message PushVolumeResponse {}
+
+message PushSnapshotRequest {
+  string snapshot_id = 1;
+  string transfer_id = 2;
+  // target_address is the destination node's grpc address.
+  string target_address = 3;
+  string operation_id = 4;
+}
+
+message PushSnapshotResponse {}
 
 message GetNodeStatusRequest {}
 
