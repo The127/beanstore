@@ -1,0 +1,21 @@
+[Unit]
+Description=beanstore per-node storage daemon
+Documentation=https://github.com/The127/beanstore
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/beanstore --config /etc/beanstore/config.yaml
+Restart=on-failure
+RestartSec=5
+
+# lvm needs root, /dev, its locks and its metadata backups
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+ProtectSystem=full
+ReadWritePaths=/etc/lvm /run
+
+[Install]
+WantedBy=multi-user.target

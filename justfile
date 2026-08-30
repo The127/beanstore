@@ -73,6 +73,14 @@ test-integration:
     cd lvm && go test -tags integration -run TestIntegration -count=1 -v ./...
     go test -tags integration -run TestIntegration -count=1 -v ./internal/e2e/
 
+# validate the goreleaser config
+release-check:
+    go run github.com/goreleaser/goreleaser/v2@latest check
+
+# build the release artifacts locally without publishing
+release-snapshot:
+    go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
+
 # check for known vulnerabilities in reachable code
 vuln:
     go run golang.org/x/vuln/cmd/govulncheck@latest ./...

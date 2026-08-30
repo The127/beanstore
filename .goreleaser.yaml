@@ -1,0 +1,66 @@
+version: 2
+
+builds:
+  - main: ./cmd/beanstore
+    binary: beanstore
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+      - packaging/beanstore.service
+      - packaging/config.yaml
+
+nfpms:
+  - package_name: beanstore
+    formats:
+      - deb
+      - rpm
+    maintainer: karo <karolinkostial@gmail.com>
+    description: LVM thin volume storage daemon with node to node moves.
+    homepage: https://github.com/The127/beanstore
+    license: AGPL-3.0-only
+    dependencies:
+      - lvm2
+    contents:
+      - src: packaging/beanstore.service
+        dst: /usr/lib/systemd/system/beanstore.service
+      - src: packaging/config.yaml
+        dst: /etc/beanstore/config.yaml
+        type: config|noreplace
+    scripts:
+      postinstall: packaging/postinstall.sh
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat'
+      order: 0
+    - title: Fixes
+      regexp: '^fix'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - '^chore'
+      - '^ci'
+      - '^docs'
+      - '^test'
+      - '^refactor'
+
+release:
+  draft: false
+  prerelease: auto

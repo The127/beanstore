@@ -1,0 +1,32 @@
+# beanstore daemon configuration. The daemon refuses to start until
+# the storage and transport sections are configured.
+
+# The grpc listen address.
+# listen_address: 0.0.0.0:50051
+
+# The volume group holding the thin pool all volumes live in. The vg
+# must exist, beanstore never creates it.
+# volume_group: vg0
+# thin_pool: beanstore
+
+# Create the thin pool at startup when it is missing.
+# create_pool: true
+# pool_size: 90%
+
+# Mutual TLS. The ca signs the orchestrator and node certificates,
+# roles come from the certificate OU: beanstore-orchestrator calls
+# everything, beanstore-node only the transfer plane.
+# tls:
+#   ca_file: /etc/beanstore/ca.pem
+#   cert_file: /etc/beanstore/node.pem
+#   key_file: /etc/beanstore/node.key
+
+# Plaintext without authentication needs an explicit opt in. Never do
+# this outside a trusted network.
+# insecure: true
+
+# Inbound transfer limits.
+# max_inbound_transfers: 4
+# transfer_grace: 60s
+
+# log_level: info

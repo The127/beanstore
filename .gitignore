@@ -139,3 +139,4 @@ fabric.properties
 /beanstore
 # Claude Code personal extension
 CLAUDE.local.md
+dist/

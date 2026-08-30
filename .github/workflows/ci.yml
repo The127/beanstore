@@ -63,6 +63,12 @@ jobs:
           version: v2.11.4
           working-directory: lvm
 
+      - name: goreleaser config check
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check
+
       - name: proto lint
         uses: bufbuild/buf-action@v1
         with:
