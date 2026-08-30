@@ -63,6 +63,13 @@ service VolumeService {
   // push ends. An unknown commit outcome fails the operation, a
   // retry is a new transfer id.
   rpc PushSnapshot(PushSnapshotRequest) returns (PushSnapshotResponse);
+
+  // CreateVolumeFromSnapshot copies a SNAPSHOT into a new READY
+  // volume on this node. A full copy at the snapshot's size, the
+  // volume shares nothing with the snapshot and survives its
+  // deletion. The snapshot refuses deletion while the copy runs.
+  // Progress is polled on the operation.
+  rpc CreateVolumeFromSnapshot(CreateVolumeFromSnapshotRequest) returns (CreateVolumeFromSnapshotResponse);
 }
 
 // OperationService reports on long-running node operations. Operation
@@ -187,6 +194,14 @@ message PushSnapshotRequest {
 }
 
 message PushSnapshotResponse {}
+
+message CreateVolumeFromSnapshotRequest {
+  string volume_id = 1;
+  string source_snapshot_id = 2;
+  string operation_id = 3;
+}
+
+message CreateVolumeFromSnapshotResponse {}
 
 message GetNodeStatusRequest {}
 

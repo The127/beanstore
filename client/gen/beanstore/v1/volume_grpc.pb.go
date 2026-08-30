@@ -19,19 +19,20 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	VolumeService_CreateVolume_FullMethodName   = "/beanstore.v1.VolumeService/CreateVolume"
-	VolumeService_ListVolumes_FullMethodName    = "/beanstore.v1.VolumeService/ListVolumes"
-	VolumeService_GetNodeStatus_FullMethodName  = "/beanstore.v1.VolumeService/GetNodeStatus"
-	VolumeService_Attach_FullMethodName         = "/beanstore.v1.VolumeService/Attach"
-	VolumeService_Detach_FullMethodName         = "/beanstore.v1.VolumeService/Detach"
-	VolumeService_DeleteVolume_FullMethodName   = "/beanstore.v1.VolumeService/DeleteVolume"
-	VolumeService_ResizeVolume_FullMethodName   = "/beanstore.v1.VolumeService/ResizeVolume"
-	VolumeService_CreateSnapshot_FullMethodName = "/beanstore.v1.VolumeService/CreateSnapshot"
-	VolumeService_DeleteSnapshot_FullMethodName = "/beanstore.v1.VolumeService/DeleteSnapshot"
-	VolumeService_Export_FullMethodName         = "/beanstore.v1.VolumeService/Export"
-	VolumeService_PrepareReceive_FullMethodName = "/beanstore.v1.VolumeService/PrepareReceive"
-	VolumeService_PushVolume_FullMethodName     = "/beanstore.v1.VolumeService/PushVolume"
-	VolumeService_PushSnapshot_FullMethodName   = "/beanstore.v1.VolumeService/PushSnapshot"
+	VolumeService_CreateVolume_FullMethodName             = "/beanstore.v1.VolumeService/CreateVolume"
+	VolumeService_ListVolumes_FullMethodName              = "/beanstore.v1.VolumeService/ListVolumes"
+	VolumeService_GetNodeStatus_FullMethodName            = "/beanstore.v1.VolumeService/GetNodeStatus"
+	VolumeService_Attach_FullMethodName                   = "/beanstore.v1.VolumeService/Attach"
+	VolumeService_Detach_FullMethodName                   = "/beanstore.v1.VolumeService/Detach"
+	VolumeService_DeleteVolume_FullMethodName             = "/beanstore.v1.VolumeService/DeleteVolume"
+	VolumeService_ResizeVolume_FullMethodName             = "/beanstore.v1.VolumeService/ResizeVolume"
+	VolumeService_CreateSnapshot_FullMethodName           = "/beanstore.v1.VolumeService/CreateSnapshot"
+	VolumeService_DeleteSnapshot_FullMethodName           = "/beanstore.v1.VolumeService/DeleteSnapshot"
+	VolumeService_Export_FullMethodName                   = "/beanstore.v1.VolumeService/Export"
+	VolumeService_PrepareReceive_FullMethodName           = "/beanstore.v1.VolumeService/PrepareReceive"
+	VolumeService_PushVolume_FullMethodName               = "/beanstore.v1.VolumeService/PushVolume"
+	VolumeService_PushSnapshot_FullMethodName             = "/beanstore.v1.VolumeService/PushSnapshot"
+	VolumeService_CreateVolumeFromSnapshot_FullMethodName = "/beanstore.v1.VolumeService/CreateVolumeFromSnapshot"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -83,6 +84,12 @@ type VolumeServiceClient interface {
 	// push ends. An unknown commit outcome fails the operation, a
 	// retry is a new transfer id.
 	PushSnapshot(ctx context.Context, in *PushSnapshotRequest, opts ...grpc.CallOption) (*PushSnapshotResponse, error)
+	// CreateVolumeFromSnapshot copies a SNAPSHOT into a new READY
+	// volume on this node. A full copy at the snapshot's size, the
+	// volume shares nothing with the snapshot and survives its
+	// deletion. The snapshot refuses deletion while the copy runs.
+	// Progress is polled on the operation.
+	CreateVolumeFromSnapshot(ctx context.Context, in *CreateVolumeFromSnapshotRequest, opts ...grpc.CallOption) (*CreateVolumeFromSnapshotResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -232,6 +239,16 @@ func (c *volumeServiceClient) PushSnapshot(ctx context.Context, in *PushSnapshot
 	return out, nil
 }
 
+func (c *volumeServiceClient) CreateVolumeFromSnapshot(ctx context.Context, in *CreateVolumeFromSnapshotRequest, opts ...grpc.CallOption) (*CreateVolumeFromSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateVolumeFromSnapshotResponse)
+	err := c.cc.Invoke(ctx, VolumeService_CreateVolumeFromSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility.
@@ -281,6 +298,12 @@ type VolumeServiceServer interface {
 	// push ends. An unknown commit outcome fails the operation, a
 	// retry is a new transfer id.
 	PushSnapshot(context.Context, *PushSnapshotRequest) (*PushSnapshotResponse, error)
+	// CreateVolumeFromSnapshot copies a SNAPSHOT into a new READY
+	// volume on this node. A full copy at the snapshot's size, the
+	// volume shares nothing with the snapshot and survives its
+	// deletion. The snapshot refuses deletion while the copy runs.
+	// Progress is polled on the operation.
+	CreateVolumeFromSnapshot(context.Context, *CreateVolumeFromSnapshotRequest) (*CreateVolumeFromSnapshotResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -329,6 +352,9 @@ func (UnimplementedVolumeServiceServer) PushVolume(context.Context, *PushVolumeR
 }
 func (UnimplementedVolumeServiceServer) PushSnapshot(context.Context, *PushSnapshotRequest) (*PushSnapshotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushSnapshot not implemented")
+}
+func (UnimplementedVolumeServiceServer) CreateVolumeFromSnapshot(context.Context, *CreateVolumeFromSnapshotRequest) (*CreateVolumeFromSnapshotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateVolumeFromSnapshot not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 func (UnimplementedVolumeServiceServer) testEmbeddedByValue()                       {}
@@ -578,6 +604,24 @@ func _VolumeService_PushSnapshot_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_CreateVolumeFromSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateVolumeFromSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).CreateVolumeFromSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_CreateVolumeFromSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).CreateVolumeFromSnapshot(ctx, req.(*CreateVolumeFromSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -632,6 +676,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PushSnapshot",
 			Handler:    _VolumeService_PushSnapshot_Handler,
+		},
+		{
+			MethodName: "CreateVolumeFromSnapshot",
+			Handler:    _VolumeService_CreateVolumeFromSnapshot_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
