@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -85,7 +86,11 @@ type testDaemon struct {
 	transfers  beanstorev1.TransferServiceClient
 	vg         string
 	lvm        *lvm.Client
+	address    string
 }
+
+// daemonSeq keeps vg names unique when one test runs two daemons.
+var daemonSeq atomic.Int64
 
 // daemon brings up the full stack on a real vg: storage setup with
 // pool bootstrap, api, grpc over localhost.
@@ -96,7 +101,7 @@ func daemon(t *testing.T) testDaemon {
 	client := lvm.New(lvm.WithRunner(sudoRunner{}), lvm.WithDevices(loop))
 	ctx := t.Context()
 
-	vg := fmt.Sprintf("beanstore-e2e-%d", os.Getpid())
+	vg := fmt.Sprintf("beanstore-e2e-%d-%d", os.Getpid(), daemonSeq.Add(1))
 	require.NoError(t, client.CreatePhysicalVolume(ctx, loop, lvm.CreatePhysicalVolumeOptions{}))
 	require.NoError(t, client.CreateVolumeGroup(ctx, vg, []lvm.Device{loop}, lvm.CreateVolumeGroupOptions{}))
 	t.Cleanup(func() {
@@ -136,6 +141,7 @@ func daemon(t *testing.T) testDaemon {
 		transfers:  beanstorev1.NewTransferServiceClient(conn),
 		vg:         vg,
 		lvm:        client,
+		address:    listener.Addr().String(),
 	}
 }
 
