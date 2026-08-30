@@ -17,6 +17,7 @@ import (
 	beanstorev1 "github.com/The127/beanstore/client/gen/beanstore/v1"
 	"github.com/The127/beanstore/internal/config"
 	"github.com/The127/beanstore/internal/operations"
+	"github.com/The127/beanstore/internal/storage"
 	"github.com/The127/beanstore/lvm"
 )
 
@@ -68,6 +69,7 @@ func testServer(t *testing.T, fake *fakeRunner) (*volumeServiceServer, *operatio
 		lvm:        lvm.New(lvm.WithRunner(fake)),
 		cfg:        config.Config{VolumeGroup: "vg0", ThinPool: "pool0"},
 		ops:        ops,
+		pins:       storage.NewExportPins(),
 		background: t.Context(),
 	}
 
