@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	beanstorev1 "github.com/The127/beanstore/client/gen/beanstore/v1"
+	"github.com/The127/beanstore/internal/storage"
+	"github.com/The127/beanstore/lvm"
 )
 
 // readDevice reads size bytes from the attached device.
@@ -164,6 +166,50 @@ func TestIntegrationRestoreEdges(t *testing.T) {
 	})
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err),
 		"the siblings still guard the rolled back volume")
+}
+
+func TestIntegrationRollbackCrashRecovery(t *testing.T) {
+	lvmClient, cfg := provision(t)
+	ctx := t.Context()
+
+	seed := func(name string, tags []string) {
+		require.NoError(t, lvmClient.CreateThinVolume(ctx, cfg.VolumeGroup, cfg.ThinPool,
+			name, 16<<20, lvm.CreateThinVolumeOptions{
+				AddTags:  tags,
+				Activate: lvm.Bool(false),
+			}))
+	}
+	rollbackTags := func(target string) []string {
+		return []string{storage.StateTag(storage.StateRollback), "beanstore.rollback_target=" + target}
+	}
+
+	// rule 2: the target survived, the copy aborts
+	seed("vol-a", []string{storage.StateTag(storage.StateReady)})
+	seed("vol-a+rb", rollbackTags("vol-a"))
+	// rule 3: the target is gone, the rollback finishes
+	seed("vol-b+rb", rollbackTags("vol-b"))
+	// rule 1: renamed but not retagged
+	seed("vol-c", rollbackTags("vol-c"))
+
+	require.NoError(t, storage.Recover(ctx, lvmClient, cfg))
+
+	volumes, err := storage.ListVolumes(ctx, lvmClient, cfg)
+	require.NoError(t, err)
+	states := map[string]storage.State{}
+	for _, volume := range volumes {
+		states[volume.ID] = volume.State
+	}
+	assert.Equal(t, storage.StateReady, states["vol-a"])
+	assert.NotContains(t, states, "vol-a+rb", "the aborted copy is gone")
+	assert.Equal(t, storage.StateReady, states["vol-b"], "the rollback finished under the target name")
+	assert.NotContains(t, states, "vol-b+rb")
+	assert.Equal(t, storage.StateReady, states["vol-c"], "the renamed copy only retagged")
+
+	// the finished volume attaches, its skip flag is cleared
+	node := serve(t, lvmClient, cfg)
+	attach, err := node.volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "vol-b"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, attach.DevicePath)
 }
 
 func TestIntegrationRollbackVolume(t *testing.T) {
