@@ -232,7 +232,54 @@ func TestCreateSnapshotBuildsCommand(t *testing.T) {
 	created := strings.Join(fake.calls[1].Args(), " ")
 	assert.Contains(t, created, "lvcreate -s -n snap-1")
 	assert.Contains(t, created, "--addtag beanstore.state=snapshot")
+	assert.Contains(t, created, "--addtag beanstore.origin=vol-1")
 	assert.Contains(t, created, "vg0/vol-1")
+}
+
+const lineageLVs = `{"report": [{"lv": [
+	{"lv_name": "snap-tagged", "lv_uuid": "u1", "vg_name": "vg0",
+	 "lv_size": "1048576", "lv_attr": "Vri---tz--",
+	 "lv_tags": "beanstore.state=snapshot,beanstore.origin=vol-gone",
+	 "pool_lv": "pool0", "origin": "", "lv_path": "", "lv_dm_path": "",
+	 "data_percent": "", "metadata_percent": "", "lv_active": "",
+	 "lv_layout": "thin,sparse"},
+	{"lv_name": "snap-legacy", "lv_uuid": "u2", "vg_name": "vg0",
+	 "lv_size": "1048576", "lv_attr": "Vri---tz--",
+	 "lv_tags": "beanstore.state=snapshot", "pool_lv": "pool0",
+	 "origin": "vol-1", "lv_path": "", "lv_dm_path": "",
+	 "data_percent": "", "metadata_percent": "", "lv_active": "",
+	 "lv_layout": "thin,sparse"},
+	{"lv_name": "vol-rolled", "lv_uuid": "u3", "vg_name": "vg0",
+	 "lv_size": "1048576", "lv_attr": "Vwi---tz--",
+	 "lv_tags": "beanstore.state=ready", "pool_lv": "pool0",
+	 "origin": "snap-tagged", "lv_path": "", "lv_dm_path": "",
+	 "data_percent": "", "metadata_percent": "", "lv_active": "",
+	 "lv_layout": "thin,sparse"}
+]}], "log": []}`
+
+func TestOriginComesFromTheLineageTag(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{lineageLVs}}
+	client := lvm.New(lvm.WithRunner(fake))
+
+	volumes, err := ListVolumes(t.Context(), client, testConfig())
+
+	require.NoError(t, err)
+	require.Len(t, volumes, 3)
+	assert.Equal(t, "vol-gone", volumes[0].Origin, "the tag survives the origin's deletion")
+	assert.True(t, volumes[0].OriginTagged)
+	assert.Equal(t, "vol-1", volumes[1].Origin, "pre-tag snapshots fall back to the lvm field")
+	assert.False(t, volumes[1].OriginTagged)
+	assert.Empty(t, volumes[2].Origin, "non-snapshot states suppress the lvm field")
+}
+
+func TestSnapshotsOfMatchesByLineage(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{lineageLVs}}
+	client := lvm.New(lvm.WithRunner(fake))
+
+	snapshots, err := SnapshotsOf(t.Context(), client, testConfig(), "vol-gone")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"snap-tagged"}, snapshots)
 }
 
 func TestCreateSnapshotRefusesSnapshotOrigin(t *testing.T) {

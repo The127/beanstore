@@ -71,6 +71,19 @@ const pushingSingle = `{"report": [{"lv": [
 	 "lv_active": "active", "lv_layout": "thin,sparse"}
 ]}], "log": []}`
 
+func TestRecoverBackfillsSnapshotLineage(t *testing.T) {
+	fake := &fakeRunner{outputs: []string{lineageLVs, ""}}
+	client := lvm.New(lvm.WithRunner(fake))
+
+	err := Recover(t.Context(), client, testConfig())
+
+	require.NoError(t, err)
+	require.Len(t, fake.calls, 2, "one backfill for the legacy snapshot only")
+	backfilled := strings.Join(fake.calls[1].Args(), " ")
+	assert.Contains(t, backfilled, "--addtag beanstore.origin=vol-1")
+	assert.Contains(t, backfilled, "vg0/snap-legacy")
+}
+
 func TestRecoverRevertsPushingKeepsCommitting(t *testing.T) {
 	fake := &fakeRunner{outputs: []string{pushStates, pushingSingle, "", ""}}
 	client := lvm.New(lvm.WithRunner(fake))

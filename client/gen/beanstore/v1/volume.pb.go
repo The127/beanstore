@@ -103,7 +103,8 @@ type Volume struct {
 	SizeBytes uint64 `protobuf:"varint,3,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
 	// used_bytes is the real pool space the volume occupies.
 	UsedBytes uint64 `protobuf:"varint,4,opt,name=used_bytes,json=usedBytes,proto3" json:"used_bytes,omitempty"`
-	// origin_id names a snapshot's origin volume, empty otherwise.
+	// origin_id names the volume a snapshot was taken from, empty
+	// otherwise. It survives the origin's deletion.
 	OriginId      string `protobuf:"bytes,5,opt,name=origin_id,json=originId,proto3" json:"origin_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

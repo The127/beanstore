@@ -31,6 +31,10 @@ const (
 // stateTagPrefix marks an lv as beanstore owned.
 const stateTagPrefix = "beanstore.state="
 
+// originTagPrefix persists a snapshot's origin volume. The lvm origin
+// field empties when the origin lv is removed, the tag does not.
+const originTagPrefix = "beanstore.origin="
+
 // StateTag renders the lvm tag persisting the given state.
 func StateTag(state State) string {
 	return stateTagPrefix + string(state)
@@ -44,9 +48,13 @@ type Volume struct {
 	UsedBytes uint64
 	// Path is the block device path, empty while inactive.
 	Path string
-	// Origin names a snapshot's origin volume, empty otherwise.
+	// Origin names the volume a snapshot was taken from, empty
+	// otherwise. Tag backed, it survives the origin's deletion.
 	Origin string
-	Active bool
+	// OriginTagged reports whether Origin came from the lineage tag
+	// or from the lvm origin field of a pre-tag snapshot.
+	OriginTagged bool
+	Active       bool
 	// Transfer is the transfer id of an INCOMING, PUSHING or
 	// COMMITTING volume, empty otherwise.
 	Transfer string
@@ -161,16 +169,25 @@ func GetVolume(ctx context.Context, client *lvm.Client, cfg config.Config, id st
 func volumeFromLV(lv lvm.LogicalVolume) Volume {
 	state, _ := stateOf(lv.Tags)
 
+	// non-snapshot states suppress the lvm origin field, a rolled
+	// back or cloned volume is not a snapshot of anything
+	origin := tagValue(lv.Tags, originTagPrefix)
+	tagged := origin != ""
+	if !tagged && state == StateSnapshot {
+		origin = lv.Origin
+	}
+
 	return Volume{
-		ID:         lv.Name,
-		State:      state,
-		SizeBytes:  lv.SizeBytes,
-		UsedBytes:  uint64(float64(lv.SizeBytes) * lv.DataPercent / 100),
-		Path:       lv.Path,
-		Origin:     lv.Origin,
-		Active:     lv.Active,
-		Transfer:   tagValue(lv.Tags, transferTagPrefix),
-		PushTarget: tagValue(lv.Tags, targetTagPrefix),
+		ID:           lv.Name,
+		State:        state,
+		SizeBytes:    lv.SizeBytes,
+		UsedBytes:    uint64(float64(lv.SizeBytes) * lv.DataPercent / 100),
+		Path:         lv.Path,
+		Origin:       origin,
+		OriginTagged: tagged,
+		Active:       lv.Active,
+		Transfer:     tagValue(lv.Tags, transferTagPrefix),
+		PushTarget:   tagValue(lv.Tags, targetTagPrefix),
 	}
 }
 
@@ -185,21 +202,18 @@ func tagValue(tags []string, prefix string) string {
 	return ""
 }
 
-// SnapshotsOf lists the ids of the volume's snapshots.
+// SnapshotsOf lists the ids of the volume's snapshots by their
+// lineage tags.
 func SnapshotsOf(ctx context.Context, client *lvm.Client, cfg config.Config, id string) ([]string, error) {
-	lvs, err := client.ListLogicalVolumes(ctx, lvm.ListLogicalVolumesOptions{
-		VG:     cfg.VolumeGroup,
-		Select: lvm.Select("origin = " + id),
-	})
+	volumes, err := ListVolumes(ctx, client, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("listing snapshots of %s: %w", id, err)
 	}
 
 	var snapshots []string
-	for _, lv := range lvs {
-		state, owned := stateOf(lv.Tags)
-		if owned && state == StateSnapshot {
-			snapshots = append(snapshots, lv.Name)
+	for _, volume := range volumes {
+		if volume.State == StateSnapshot && volume.Origin == id {
+			snapshots = append(snapshots, volume.ID)
 		}
 	}
 
@@ -219,7 +233,7 @@ func CreateSnapshot(ctx context.Context, client *lvm.Client, cfg config.Config, 
 	}
 
 	err = client.CreateThinSnapshot(ctx, cfg.VolumeGroup, originID, snapshotID, lvm.CreateThinSnapshotOptions{
-		AddTags:    []string{StateTag(StateSnapshot)},
+		AddTags:    []string{StateTag(StateSnapshot), originTagPrefix + originID},
 		Permission: lvm.PermissionReadOnly,
 	})
 	if err != nil {

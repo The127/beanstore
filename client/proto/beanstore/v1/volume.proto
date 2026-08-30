@@ -102,7 +102,8 @@ message Volume {
   uint64 size_bytes = 3;
   // used_bytes is the real pool space the volume occupies.
   uint64 used_bytes = 4;
-  // origin_id names a snapshot's origin volume, empty otherwise.
+  // origin_id names the volume a snapshot was taken from, empty
+  // otherwise. It survives the origin's deletion.
   string origin_id = 5;
 }
 

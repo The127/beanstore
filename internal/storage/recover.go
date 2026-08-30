@@ -45,6 +45,21 @@ func Recover(ctx context.Context, client *lvm.Client, cfg config.Config) error {
 			log.Info("re-activated attached volume", "volume", volume.ID)
 
 		case StateSnapshot:
+			// pre-tag snapshots get their lineage tag while the lvm
+			// origin field still carries it
+			if !volume.OriginTagged && volume.Origin != "" {
+				err = client.ChangeLogicalVolume(ctx,
+					lvm.Name(cfg.VolumeGroup+"/"+volume.ID), lvm.ChangeLogicalVolumeOptions{
+						AddTags: []string{originTagPrefix + volume.Origin},
+					})
+				if err != nil {
+					log.Error("backfilling snapshot lineage during recovery",
+						"volume", volume.ID, "error", err)
+					continue
+				}
+				log.Info("backfilled snapshot lineage", "volume", volume.ID, "origin", volume.Origin)
+			}
+
 			// a crash mid-export leaves the snapshot active
 			if !volume.Active {
 				continue
