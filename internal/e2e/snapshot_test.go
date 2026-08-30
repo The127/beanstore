@@ -380,6 +380,86 @@ func TestIntegrationSnapshotCopy(t *testing.T) {
 	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_SNAPSHOT, states["snap-1"])
 }
 
+func TestIntegrationSnapshotPush(t *testing.T) {
+	source := daemon(t)
+	target := daemon(t)
+	ctx := t.Context()
+
+	_, err := source.volumes.CreateVolume(ctx, &beanstorev1.CreateVolumeRequest{
+		VolumeId:    "vol-1",
+		SizeBytes:   16 << 20,
+		OperationId: "op-create",
+	})
+	require.NoError(t, err)
+	waitDone(t, source.operations, "op-create")
+
+	attach, err := source.volumes.Attach(ctx, &beanstorev1.AttachRequest{VolumeId: "vol-1"})
+	require.NoError(t, err)
+	pattern := patternFile(t, 3<<20, 233)
+	require.NoError(t, sudoRun(ctx, "dd", "if="+pattern.path, "of="+attach.DevicePath, "bs=1M", "conv=fsync"))
+
+	// the volume stays attached, its snapshot backs up live data
+	_, err = source.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-1",
+		SnapshotId: "snap-1",
+	})
+	require.NoError(t, err)
+
+	_, err = target.volumes.PrepareReceive(ctx, &beanstorev1.PrepareReceiveRequest{
+		VolumeId:   "vol-backup",
+		SizeBytes:  16 << 20,
+		TransferId: "tr-snap",
+	})
+	require.NoError(t, err)
+
+	// the unprivileged daemons need device access a root daemon has
+	require.NoError(t, sudoRun(ctx, "chmod", "o+rw", "/dev/"+target.vg+"/vol-backup"))
+	require.NoError(t, source.lvm.ActivateLogicalVolume(ctx, lvm.Name(source.vg+"/snap-1"),
+		lvm.ActivateLogicalVolumeOptions{IgnoreActivationSkip: true}))
+	require.NoError(t, sudoRun(ctx, "chmod", "o+r", "/dev/"+source.vg+"/snap-1"))
+
+	_, err = source.volumes.PushSnapshot(ctx, &beanstorev1.PushSnapshotRequest{
+		SnapshotId:    "snap-1",
+		TransferId:    "tr-snap",
+		TargetAddress: target.address,
+		OperationId:   "op-push",
+	})
+	require.NoError(t, err)
+	waitDone(t, source.operations, "op-push")
+
+	// a full standalone volume on the target
+	list, err := target.volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	require.Len(t, list.Volumes, 1)
+	assert.Equal(t, "vol-backup", list.Volumes[0].VolumeId)
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_READY, list.Volumes[0].State)
+	assert.Empty(t, list.Volumes[0].OriginId)
+
+	_, err = target.volumes.CreateSnapshot(ctx, &beanstorev1.CreateSnapshotRequest{
+		VolumeId:   "vol-backup",
+		SnapshotId: "snap-check",
+	})
+	require.NoError(t, err)
+	_, trailer := export(t, target, "snap-check")
+
+	expected := make([]byte, 16<<20)
+	copy(expected, pattern.bytes)
+	assert.Equal(t, expectedDigest(expected), trailer.Digest, "the copy carries the snapshot content")
+
+	// copy semantics: the source kept everything, the pin is gone
+	list, err = source.volumes.ListVolumes(ctx, &beanstorev1.ListVolumesRequest{})
+	require.NoError(t, err)
+	states := map[string]beanstorev1.VolumeState{}
+	for _, volume := range list.Volumes {
+		states[volume.VolumeId] = volume.State
+	}
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_ATTACHED, states["vol-1"])
+	assert.Equal(t, beanstorev1.VolumeState_VOLUME_STATE_SNAPSHOT, states["snap-1"])
+
+	_, err = source.volumes.DeleteSnapshot(ctx, &beanstorev1.DeleteSnapshotRequest{SnapshotId: "snap-1"})
+	require.NoError(t, err, "the finished push released its pin")
+}
+
 func TestIntegrationSnapshotRecovery(t *testing.T) {
 	lvmClient, cfg := provision(t)
 	ctx := t.Context()
