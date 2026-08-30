@@ -162,6 +162,27 @@ func daemon(t *testing.T) testDaemon {
 	return serve(t, client, cfg)
 }
 
+// patternData is a written test pattern and the file holding it.
+type patternData struct {
+	path  string
+	bytes []byte
+}
+
+// patternFile writes a deterministic byte pattern for dd, distinct
+// per modulus.
+func patternFile(t *testing.T, size int, modulus int) patternData {
+	t.Helper()
+
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(i % modulus)
+	}
+	path := filepath.Join(t.TempDir(), fmt.Sprintf("pattern-%d", modulus))
+	require.NoError(t, os.WriteFile(path, data, 0o600))
+
+	return patternData{path: path, bytes: data}
+}
+
 func waitDone(t *testing.T, operations beanstorev1.OperationServiceClient, id string) {
 	t.Helper()
 
