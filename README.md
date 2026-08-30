@@ -9,8 +9,7 @@
 An LVM-based per-node storage API. beanstore manages thin logical volumes on
 the node it runs on and moves detached volumes between nodes. Nothing more.
 
-> **Status: early development.** Nothing here is usable yet. The design
-> contract is settled before code, and the code follows it.
+> **Status: early development.** Not production ready.
 
 ## Design
 
