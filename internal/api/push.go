@@ -239,8 +239,8 @@ func (s *volumeServiceServer) finishPush(conn *grpc.ClientConn, id, transferID, 
 // the target: present and not INCOMING means the commit landed. An
 // unreachable target leaves the volume COMMITTING.
 func (s *volumeServiceServer) resolvePush(conn *grpc.ClientConn, id, transferID, operationID string, commitErr error) {
-	response, err := beanstorev1.NewVolumeServiceClient(conn).ListVolumes(s.background,
-		&beanstorev1.ListVolumesRequest{})
+	response, err := beanstorev1.NewTransferServiceClient(conn).QueryVolume(s.background,
+		&beanstorev1.QueryVolumeRequest{VolumeId: id})
 	if err != nil {
 		deactivateErr := s.lvm.DeactivateLogicalVolume(s.background,
 			lvm.Name(s.cfg.VolumeGroup+"/"+id), lvm.DeactivateLogicalVolumeOptions{})
@@ -255,17 +255,15 @@ func (s *volumeServiceServer) resolvePush(conn *grpc.ClientConn, id, transferID,
 		return
 	}
 
-	s.settlePush(conn, response.Volumes, id, transferID, operationID, commitErr)
+	s.settlePush(conn, response.Committed, id, transferID, operationID, commitErr)
 }
 
 // settlePush applies the target's answer to a COMMITTING volume.
-func (s *volumeServiceServer) settlePush(conn *grpc.ClientConn, listed []*beanstorev1.Volume, id, transferID, operationID string, commitErr error) {
-	for _, volume := range listed {
-		if volume.VolumeId == id && volume.State != beanstorev1.VolumeState_VOLUME_STATE_INCOMING {
-			s.retirePushed(id, operationID)
+func (s *volumeServiceServer) settlePush(conn *grpc.ClientConn, committed bool, id, transferID, operationID string, commitErr error) {
+	if committed {
+		s.retirePushed(id, operationID)
 
-			return
-		}
+		return
 	}
 
 	// nothing committed, make sure nothing still can

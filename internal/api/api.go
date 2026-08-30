@@ -48,6 +48,8 @@ type operationServiceServer struct {
 type transferServiceServer struct {
 	beanstorev1.UnimplementedTransferServiceServer
 	transfers *storage.Transfers
+	lvm       *lvm.Client
+	cfg       config.Config
 }
 
 // Register wires all beanstore services onto the given grpc server.
@@ -72,7 +74,9 @@ func Register(ctx context.Context, server *grpc.Server, client *lvm.Client, cfg 
 	}
 	beanstorev1.RegisterVolumeServiceServer(server, volumes)
 	beanstorev1.RegisterOperationServiceServer(server, &operationServiceServer{ops: ops})
-	beanstorev1.RegisterTransferServiceServer(server, &transferServiceServer{transfers: transfers})
+	beanstorev1.RegisterTransferServiceServer(server, &transferServiceServer{
+		transfers: transfers, lvm: client, cfg: cfg,
+	})
 
 	go volumes.resolveRecovered()
 
@@ -452,6 +456,22 @@ func (s *transferServiceServer) AbortTransfer(_ context.Context, request *beanst
 	s.transfers.Abort(request.TransferId)
 
 	return &beanstorev1.AbortTransferResponse{}, nil
+}
+
+func (s *transferServiceServer) QueryVolume(ctx context.Context, request *beanstorev1.QueryVolumeRequest) (*beanstorev1.QueryVolumeResponse, error) {
+	volume, err := storage.GetVolume(ctx, s.lvm, s.cfg, request.VolumeId)
+	if errors.Is(err, storage.ErrNotFound) {
+		return &beanstorev1.QueryVolumeResponse{Committed: false}, nil
+	}
+	if err != nil {
+		logging.FromContext(ctx).Error("querying volume", "volume", request.VolumeId, "error", err)
+
+		return nil, status.Error(codes.Internal, "volume lookup failed")
+	}
+
+	return &beanstorev1.QueryVolumeResponse{
+		Committed: volume.State != storage.StateIncoming,
+	}, nil
 }
 
 // transferError maps transfer errors onto grpc codes. Internal

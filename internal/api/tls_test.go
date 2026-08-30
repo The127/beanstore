@@ -27,9 +27,17 @@ import (
 	"github.com/The127/beanstore/internal/config"
 )
 
-// testPKI writes a throwaway ca plus one leaf usable as server and
-// client for the dns name "localhost".
-func testPKI(t *testing.T) config.TLS {
+// testPKIAuthority mints throwaway leaves for the dns name
+// "localhost" under one ca.
+type testPKIAuthority struct {
+	dir    string
+	caFile string
+	caCert *x509.Certificate
+	caKey  *ecdsa.PrivateKey
+	serial int64
+}
+
+func newTestPKI(t *testing.T) *testPKIAuthority {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -45,37 +53,50 @@ func testPKI(t *testing.T) config.TLS {
 	}
 	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
 	require.NoError(t, err)
-
-	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	caCert, err := x509.ParseCertificate(caDER)
 	require.NoError(t, err)
-	leafTemplate := &x509.Certificate{
-		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "node-1"},
+
+	caFile := filepath.Join(dir, "ca.pem")
+	require.NoError(t, os.WriteFile(caFile,
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}), 0o600))
+
+	return &testPKIAuthority{dir: dir, caFile: caFile, caCert: caCert, caKey: caKey, serial: 1}
+}
+
+// leaf mints a certificate whose role sits in the OU.
+func (p *testPKIAuthority) leaf(t *testing.T, name string, roles ...string) config.TLS {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	p.serial++
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(p.serial),
+		Subject:      pkix.Name{CommonName: name, OrganizationalUnit: roles},
 		DNSNames:     []string{"localhost"},
 		NotAfter:     time.Now().Add(time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
-	caCert, err := x509.ParseCertificate(caDER)
+	der, err := x509.CreateCertificate(rand.Reader, template, p.caCert, &key.PublicKey, p.caKey)
 	require.NoError(t, err)
-	leafDER, err := x509.CreateCertificate(rand.Reader, leafTemplate, caCert, &leafKey.PublicKey, caKey)
-	require.NoError(t, err)
-	leafKeyDER, err := x509.MarshalECPrivateKey(leafKey)
+	keyDER, err := x509.MarshalECPrivateKey(key)
 	require.NoError(t, err)
 
-	write := func(name, blockType string, der []byte) string {
-		path := filepath.Join(dir, name)
-		require.NoError(t, os.WriteFile(path,
-			pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: der}), 0o600))
+	certFile := filepath.Join(p.dir, name+".pem")
+	require.NoError(t, os.WriteFile(certFile,
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600))
+	keyFile := filepath.Join(p.dir, name+".key")
+	require.NoError(t, os.WriteFile(keyFile,
+		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}), 0o600))
 
-		return path
-	}
+	return config.TLS{CAFile: p.caFile, CertFile: certFile, KeyFile: keyFile}
+}
 
-	return config.TLS{
-		CAFile:   write("ca.pem", "CERTIFICATE", caDER),
-		CertFile: write("leaf.pem", "CERTIFICATE", leafDER),
-		KeyFile:  write("leaf.key", "EC PRIVATE KEY", leafKeyDER),
-	}
+func testPKI(t *testing.T) config.TLS {
+	t.Helper()
+
+	return newTestPKI(t).leaf(t, "leaf")
 }
 
 func TestMutualTLSHandshake(t *testing.T) {

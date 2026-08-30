@@ -551,6 +551,96 @@ func (*AbortTransferResponse) Descriptor() ([]byte, []int) {
 	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{10}
 }
 
+type QueryVolumeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VolumeId      string                 `protobuf:"bytes,1,opt,name=volume_id,json=volumeId,proto3" json:"volume_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryVolumeRequest) Reset() {
+	*x = QueryVolumeRequest{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryVolumeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryVolumeRequest) ProtoMessage() {}
+
+func (x *QueryVolumeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryVolumeRequest.ProtoReflect.Descriptor instead.
+func (*QueryVolumeRequest) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *QueryVolumeRequest) GetVolumeId() string {
+	if x != nil {
+		return x.VolumeId
+	}
+	return ""
+}
+
+type QueryVolumeResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// committed is true when the volume exists and is not INCOMING. An
+	// absent volume answers false, never NOT_FOUND.
+	Committed     bool `protobuf:"varint,1,opt,name=committed,proto3" json:"committed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryVolumeResponse) Reset() {
+	*x = QueryVolumeResponse{}
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryVolumeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryVolumeResponse) ProtoMessage() {}
+
+func (x *QueryVolumeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_beanstore_v1_transfer_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryVolumeResponse.ProtoReflect.Descriptor instead.
+func (*QueryVolumeResponse) Descriptor() ([]byte, []int) {
+	return file_beanstore_v1_transfer_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *QueryVolumeResponse) GetCommitted() bool {
+	if x != nil {
+		return x.Committed
+	}
+	return false
+}
+
 var File_beanstore_v1_transfer_proto protoreflect.FileDescriptor
 
 const file_beanstore_v1_transfer_proto_rawDesc = "" +
@@ -585,12 +675,17 @@ const file_beanstore_v1_transfer_proto_rawDesc = "" +
 	"\x14AbortTransferRequest\x12\x1f\n" +
 	"\vtransfer_id\x18\x01 \x01(\tR\n" +
 	"transferId\"\x17\n" +
-	"\x15AbortTransferResponse2\xec\x02\n" +
+	"\x15AbortTransferResponse\"1\n" +
+	"\x12QueryVolumeRequest\x12\x1b\n" +
+	"\tvolume_id\x18\x01 \x01(\tR\bvolumeId\"3\n" +
+	"\x13QueryVolumeResponse\x12\x1c\n" +
+	"\tcommitted\x18\x01 \x01(\bR\tcommitted2\xc0\x03\n" +
 	"\x0fTransferService\x12X\n" +
 	"\rQueryTransfer\x12\".beanstore.v1.QueryTransferRequest\x1a#.beanstore.v1.QueryTransferResponse\x12H\n" +
 	"\aReceive\x12\x1c.beanstore.v1.ReceiveRequest\x1a\x1d.beanstore.v1.ReceiveResponse(\x01\x12[\n" +
 	"\x0eCommitTransfer\x12#.beanstore.v1.CommitTransferRequest\x1a$.beanstore.v1.CommitTransferResponse\x12X\n" +
-	"\rAbortTransfer\x12\".beanstore.v1.AbortTransferRequest\x1a#.beanstore.v1.AbortTransferResponseBAZ?github.com/The127/beanstore/client/gen/beanstore/v1;beanstorev1b\x06proto3"
+	"\rAbortTransfer\x12\".beanstore.v1.AbortTransferRequest\x1a#.beanstore.v1.AbortTransferResponse\x12R\n" +
+	"\vQueryVolume\x12 .beanstore.v1.QueryVolumeRequest\x1a!.beanstore.v1.QueryVolumeResponseBAZ?github.com/The127/beanstore/client/gen/beanstore/v1;beanstorev1b\x06proto3"
 
 var (
 	file_beanstore_v1_transfer_proto_rawDescOnce sync.Once
@@ -604,7 +699,7 @@ func file_beanstore_v1_transfer_proto_rawDescGZIP() []byte {
 	return file_beanstore_v1_transfer_proto_rawDescData
 }
 
-var file_beanstore_v1_transfer_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_beanstore_v1_transfer_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_beanstore_v1_transfer_proto_goTypes = []any{
 	(*Frame)(nil),                  // 0: beanstore.v1.Frame
 	(*ExportTrailer)(nil),          // 1: beanstore.v1.ExportTrailer
@@ -617,6 +712,8 @@ var file_beanstore_v1_transfer_proto_goTypes = []any{
 	(*CommitTransferResponse)(nil), // 8: beanstore.v1.CommitTransferResponse
 	(*AbortTransferRequest)(nil),   // 9: beanstore.v1.AbortTransferRequest
 	(*AbortTransferResponse)(nil),  // 10: beanstore.v1.AbortTransferResponse
+	(*QueryVolumeRequest)(nil),     // 11: beanstore.v1.QueryVolumeRequest
+	(*QueryVolumeResponse)(nil),    // 12: beanstore.v1.QueryVolumeResponse
 }
 var file_beanstore_v1_transfer_proto_depIdxs = []int32{
 	5,  // 0: beanstore.v1.ReceiveRequest.header:type_name -> beanstore.v1.ReceiveHeader
@@ -625,12 +722,14 @@ var file_beanstore_v1_transfer_proto_depIdxs = []int32{
 	4,  // 3: beanstore.v1.TransferService.Receive:input_type -> beanstore.v1.ReceiveRequest
 	7,  // 4: beanstore.v1.TransferService.CommitTransfer:input_type -> beanstore.v1.CommitTransferRequest
 	9,  // 5: beanstore.v1.TransferService.AbortTransfer:input_type -> beanstore.v1.AbortTransferRequest
-	3,  // 6: beanstore.v1.TransferService.QueryTransfer:output_type -> beanstore.v1.QueryTransferResponse
-	6,  // 7: beanstore.v1.TransferService.Receive:output_type -> beanstore.v1.ReceiveResponse
-	8,  // 8: beanstore.v1.TransferService.CommitTransfer:output_type -> beanstore.v1.CommitTransferResponse
-	10, // 9: beanstore.v1.TransferService.AbortTransfer:output_type -> beanstore.v1.AbortTransferResponse
-	6,  // [6:10] is the sub-list for method output_type
-	2,  // [2:6] is the sub-list for method input_type
+	11, // 6: beanstore.v1.TransferService.QueryVolume:input_type -> beanstore.v1.QueryVolumeRequest
+	3,  // 7: beanstore.v1.TransferService.QueryTransfer:output_type -> beanstore.v1.QueryTransferResponse
+	6,  // 8: beanstore.v1.TransferService.Receive:output_type -> beanstore.v1.ReceiveResponse
+	8,  // 9: beanstore.v1.TransferService.CommitTransfer:output_type -> beanstore.v1.CommitTransferResponse
+	10, // 10: beanstore.v1.TransferService.AbortTransfer:output_type -> beanstore.v1.AbortTransferResponse
+	12, // 11: beanstore.v1.TransferService.QueryVolume:output_type -> beanstore.v1.QueryVolumeResponse
+	7,  // [7:12] is the sub-list for method output_type
+	2,  // [2:7] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
 	2,  // [2:2] is the sub-list for extension extendee
 	0,  // [0:2] is the sub-list for field type_name
@@ -651,7 +750,7 @@ func file_beanstore_v1_transfer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_beanstore_v1_transfer_proto_rawDesc), len(file_beanstore_v1_transfer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

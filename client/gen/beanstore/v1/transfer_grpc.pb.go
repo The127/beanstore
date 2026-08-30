@@ -23,6 +23,7 @@ const (
 	TransferService_Receive_FullMethodName        = "/beanstore.v1.TransferService/Receive"
 	TransferService_CommitTransfer_FullMethodName = "/beanstore.v1.TransferService/CommitTransfer"
 	TransferService_AbortTransfer_FullMethodName  = "/beanstore.v1.TransferService/AbortTransfer"
+	TransferService_QueryVolume_FullMethodName    = "/beanstore.v1.TransferService/QueryVolume"
 )
 
 // TransferServiceClient is the client API for TransferService service.
@@ -46,6 +47,10 @@ type TransferServiceClient interface {
 	// AbortTransfer destroys the transfer and its volume. Idempotent,
 	// aborting an unknown or finished transfer succeeds.
 	AbortTransfer(ctx context.Context, in *AbortTransferRequest, opts ...grpc.CallOption) (*AbortTransferResponse, error)
+	// QueryVolume reports whether the volume exists in a settled, non
+	// INCOMING state. Push resolution asks this instead of the control
+	// plane, so node certificates never need control plane access.
+	QueryVolume(ctx context.Context, in *QueryVolumeRequest, opts ...grpc.CallOption) (*QueryVolumeResponse, error)
 }
 
 type transferServiceClient struct {
@@ -99,6 +104,16 @@ func (c *transferServiceClient) AbortTransfer(ctx context.Context, in *AbortTran
 	return out, nil
 }
 
+func (c *transferServiceClient) QueryVolume(ctx context.Context, in *QueryVolumeRequest, opts ...grpc.CallOption) (*QueryVolumeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryVolumeResponse)
+	err := c.cc.Invoke(ctx, TransferService_QueryVolume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TransferServiceServer is the server API for TransferService service.
 // All implementations must embed UnimplementedTransferServiceServer
 // for forward compatibility.
@@ -120,6 +135,10 @@ type TransferServiceServer interface {
 	// AbortTransfer destroys the transfer and its volume. Idempotent,
 	// aborting an unknown or finished transfer succeeds.
 	AbortTransfer(context.Context, *AbortTransferRequest) (*AbortTransferResponse, error)
+	// QueryVolume reports whether the volume exists in a settled, non
+	// INCOMING state. Push resolution asks this instead of the control
+	// plane, so node certificates never need control plane access.
+	QueryVolume(context.Context, *QueryVolumeRequest) (*QueryVolumeResponse, error)
 	mustEmbedUnimplementedTransferServiceServer()
 }
 
@@ -141,6 +160,9 @@ func (UnimplementedTransferServiceServer) CommitTransfer(context.Context, *Commi
 }
 func (UnimplementedTransferServiceServer) AbortTransfer(context.Context, *AbortTransferRequest) (*AbortTransferResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AbortTransfer not implemented")
+}
+func (UnimplementedTransferServiceServer) QueryVolume(context.Context, *QueryVolumeRequest) (*QueryVolumeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryVolume not implemented")
 }
 func (UnimplementedTransferServiceServer) mustEmbedUnimplementedTransferServiceServer() {}
 func (UnimplementedTransferServiceServer) testEmbeddedByValue()                         {}
@@ -224,6 +246,24 @@ func _TransferService_AbortTransfer_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TransferService_QueryVolume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryVolumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TransferServiceServer).QueryVolume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TransferService_QueryVolume_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TransferServiceServer).QueryVolume(ctx, req.(*QueryVolumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TransferService_ServiceDesc is the grpc.ServiceDesc for TransferService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -242,6 +282,10 @@ var TransferService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AbortTransfer",
 			Handler:    _TransferService_AbortTransfer_Handler,
+		},
+		{
+			MethodName: "QueryVolume",
+			Handler:    _TransferService_QueryVolume_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

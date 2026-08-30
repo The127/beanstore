@@ -73,8 +73,8 @@ func (s *volumeServiceServer) tryResolve(id, transferID, target string) bool {
 
 	ctx, cancel := context.WithTimeout(s.background, resolveAttemptTimeout)
 	defer cancel()
-	response, err := beanstorev1.NewVolumeServiceClient(conn).ListVolumes(ctx,
-		&beanstorev1.ListVolumesRequest{})
+	response, err := beanstorev1.NewTransferServiceClient(conn).QueryVolume(ctx,
+		&beanstorev1.QueryVolumeRequest{VolumeId: id})
 	if err != nil {
 		log.Warn("push target unreachable, resolution retries",
 			"volume", id, "target", target, "error", err)
@@ -83,7 +83,7 @@ func (s *volumeServiceServer) tryResolve(id, transferID, target string) bool {
 	}
 
 	// no operation belongs to a recovered push, the ops calls no-op
-	s.settlePush(conn, response.Volumes, id, transferID, "", errNeverCommitted)
+	s.settlePush(conn, response.Committed, id, transferID, "", errNeverCommitted)
 
 	return true
 }

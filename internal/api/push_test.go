@@ -31,7 +31,6 @@ import (
 // fakeTarget scripts the destination node of a push.
 type fakeTarget struct {
 	beanstorev1.UnimplementedTransferServiceServer
-	beanstorev1.UnimplementedVolumeServiceServer
 
 	mu          sync.Mutex
 	dropStreams int
@@ -112,17 +111,24 @@ func (f *fakeTarget) AbortTransfer(_ context.Context, _ *beanstorev1.AbortTransf
 	return &beanstorev1.AbortTransferResponse{}, nil
 }
 
-func (f *fakeTarget) ListVolumes(_ context.Context, _ *beanstorev1.ListVolumesRequest) (*beanstorev1.ListVolumesResponse, error) {
+func (f *fakeTarget) QueryVolume(_ context.Context, request *beanstorev1.QueryVolumeRequest) (*beanstorev1.QueryVolumeResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if f.listErrs > 0 {
 		f.listErrs--
 
-		return nil, status.Error(codes.Unavailable, "scripted list refusal")
+		return nil, status.Error(codes.Unavailable, "scripted query refusal")
 	}
 
-	return &beanstorev1.ListVolumesResponse{Volumes: f.listed}, nil
+	for _, volume := range f.listed {
+		if volume.VolumeId == request.VolumeId &&
+			volume.State != beanstorev1.VolumeState_VOLUME_STATE_INCOMING {
+			return &beanstorev1.QueryVolumeResponse{Committed: true}, nil
+		}
+	}
+
+	return &beanstorev1.QueryVolumeResponse{Committed: false}, nil
 }
 
 func (f *fakeTarget) abortCount() int {
@@ -138,7 +144,6 @@ func pushHarness(t *testing.T, fake *fakeRunner, target *fakeTarget) *volumeServ
 	listener := bufconn.Listen(1 << 20)
 	server := grpc.NewServer()
 	beanstorev1.RegisterTransferServiceServer(server, target)
-	beanstorev1.RegisterVolumeServiceServer(server, target)
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(server.Stop)
 

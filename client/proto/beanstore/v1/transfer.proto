@@ -40,6 +40,11 @@ service TransferService {
   // AbortTransfer destroys the transfer and its volume. Idempotent,
   // aborting an unknown or finished transfer succeeds.
   rpc AbortTransfer(AbortTransferRequest) returns (AbortTransferResponse);
+
+  // QueryVolume reports whether the volume exists in a settled, non
+  // INCOMING state. Push resolution asks this instead of the control
+  // plane, so node certificates never need control plane access.
+  rpc QueryVolume(QueryVolumeRequest) returns (QueryVolumeResponse);
 }
 
 message QueryTransferRequest {
@@ -77,3 +82,13 @@ message AbortTransferRequest {
 }
 
 message AbortTransferResponse {}
+
+message QueryVolumeRequest {
+  string volume_id = 1;
+}
+
+message QueryVolumeResponse {
+  // committed is true when the volume exists and is not INCOMING. An
+  // absent volume answers false, never NOT_FOUND.
+  bool committed = 1;
+}
