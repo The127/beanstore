@@ -73,6 +73,16 @@ test-integration:
     cd lvm && go test -tags integration -run TestIntegration -count=1 -v ./...
     go test -tags integration -run TestIntegration -count=1 -v ./internal/e2e/
 
+# tag and push a release: signed tags for all three modules
+release version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    test -z "$(git status --porcelain)" || { echo "working tree not clean"; exit 1; }
+    git tag -s "client/v{{version}}" -m "client/v{{version}}"
+    git tag -s "lvm/v{{version}}" -m "lvm/v{{version}}"
+    git tag -s "v{{version}}" -m "v{{version}}"
+    git push origin "client/v{{version}}" "lvm/v{{version}}" "v{{version}}"
+
 # validate the goreleaser config
 release-check:
     go run github.com/goreleaser/goreleaser/v2@latest check

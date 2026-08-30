@@ -4,11 +4,11 @@ Beanstore is a multi module repo, releases tag all three modules on
 the same commit:
 
 ```
-git tag -s client/v0.1.0
-git tag -s lvm/v0.1.0
-git tag -s v0.1.0
-git push origin client/v0.1.0 lvm/v0.1.0 v0.1.0
+just release 0.1.0
 ```
+
+This signs and pushes `client/v0.1.0`, `lvm/v0.1.0` and `v0.1.0` and
+refuses on a dirty working tree.
 
 The `v*` tag triggers the release workflow: goreleaser builds the
 daemon for linux amd64 and arm64, packages deb and rpm (systemd unit,
