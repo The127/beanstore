@@ -15,6 +15,10 @@ updates:
         group-by: dependency-name
         patterns:
           - "*"
+    # 1.84.0 is affected by GO-2026-6443
+    ignore:
+      - dependency-name: "google.golang.org/grpc"
+        versions: ["1.84.0"]
 
   - package-ecosystem: github-actions
     directory: "/"
