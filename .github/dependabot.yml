@@ -8,6 +8,13 @@ updates:
       interval: weekly
     commit-message:
       prefix: "chore"
+    # root replaces ./client, so a shared dependency must move in both
+    # modules in one pr or the root go.mod goes stale
+    groups:
+      shared:
+        group-by: dependency-name
+        patterns:
+          - "*"
 
   - package-ecosystem: github-actions
     directory: "/"
